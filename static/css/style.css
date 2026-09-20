@@ -1,4 +1,4 @@
-/* Retro Pixel Wedding Invitation Stylesheet - Refined */
+/* Retro Pixel Wedding Invitation Stylesheet - 3D Phase 2 */
 
 :root {
   --color-bg: #121218;
@@ -489,127 +489,50 @@ html, body {
   z-index: 5;
 }
 
-#rpg-map-canvas {
+/* WebGL Loading Overlay */
+.webgl-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  display: block;
-}
-
-/* Floating POI Prompt */
-.map-interact-prompt {
-  position: absolute;
-  bottom: 110px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--color-card-bg);
-  border: 3px solid var(--color-gold);
-  box-shadow: 4px 4px 0 #000;
-  padding: 10px 18px;
+  background: rgba(18, 18, 24, 0.92);
+  z-index: 50;
   display: flex;
   align-items: center;
-  gap: 12px;
-  cursor: pointer;
-  z-index: 25;
-  animation: promptPulse 1.5s infinite ease-in-out;
+  justify-content: center;
+  transition: opacity 0.3s ease;
 }
 
-.map-interact-prompt.hidden {
-  display: none;
+.loading-box {
+  text-align: center;
+  padding: 24px 32px;
 }
 
-@keyframes promptPulse {
-  0%, 100% { transform: translateX(-50%) scale(1); }
-  50% { transform: translateX(-50%) scale(1.05); }
+.loading-spinner {
+  font-size: 36px;
+  animation: loadingSpin 1.5s infinite ease-in-out;
+  margin-bottom: 12px;
 }
 
-.prompt-icon {
-  font-size: 24px;
+@keyframes loadingSpin {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.2) rotate(180deg); }
 }
 
-.prompt-text {
-  display: flex;
-  flex-direction: column;
-}
-
-.prompt-text strong {
+.loading-title {
   font-size: 11px;
+  color: var(--color-gold);
+  margin-bottom: 6px;
+}
+
+.loading-subtitle {
+  font-family: var(--font-serif);
+  font-size: 14px;
   color: var(--color-gold-light);
 }
 
-.prompt-text span {
-  font-size: 9px;
-  color: #aaa;
-  margin-top: 2px;
-}
-
-/* Virtual Joystick Overlay */
-.virtual-joystick-wrapper {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  right: 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  pointer-events: none;
-  z-index: 20;
-}
-
-.virtual-dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 44px);
-  grid-template-rows: repeat(3, 44px);
-  gap: 4px;
-  pointer-events: auto;
-}
-
-.dpad-btn {
-  background: rgba(30, 30, 40, 0.85);
-  border: 2px solid var(--color-gold);
-  color: #fff;
-  font-family: var(--font-pixel);
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 2px 2px 0 #000;
-}
-
-.dpad-btn:active {
-  background: var(--color-gold);
-  color: #000;
-}
-
-.dpad-up { grid-column: 2; grid-row: 1; }
-.dpad-left { grid-column: 1; grid-row: 2; }
-.dpad-right { grid-column: 3; grid-row: 2; }
-.dpad-down { grid-column: 2; grid-row: 3; }
-
-.virtual-action-btn {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--color-gold);
-  border: 3px solid #000;
-  box-shadow: 3px 3px 0 #000;
-  color: #000;
-  font-family: var(--font-pixel);
-  font-size: 16px;
-  font-weight: bold;
-  cursor: pointer;
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.virtual-action-btn:active {
-  transform: scale(0.95);
-  background: var(--color-gold-light);
-}
-
-/* --- REUSABLE MODAL SYSTEM STYLES --- */
+/* Reusable Modal System & Crisp SVG Rules */
 .modal-backdrop {
   position: absolute;
   top: 0;
@@ -673,307 +596,6 @@ html, body {
   padding-right: 4px;
 }
 
-/* Profile Modal Styles */
-.couple-profiles-grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.profile-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.profile-avatar {
-  margin-bottom: 8px;
-}
-
-.profile-name {
-  font-family: var(--font-serif);
-  font-size: 15px;
-  color: var(--color-gold);
-}
-
-.profile-parent {
-  font-size: 9px;
-  color: #aaa;
-  margin-top: 4px;
-}
-
-.couple-heart-divider {
-  font-size: 24px;
-  animation: heartPulse 1.2s infinite ease-in-out;
-}
-
-@keyframes heartPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.3); }
-}
-
-.love-quote-box {
-  background: #282836;
-  border: 2px dashed var(--color-gold);
-  padding: 12px;
-  text-align: center;
-}
-
-.love-quote {
-  font-family: var(--font-serif);
-  font-size: 12px;
-  font-style: italic;
-  color: var(--color-gold-light);
-  line-height: 1.4;
-}
-
-/* Location Modal Styles */
-.schedule-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.event-card {
-  background: #252533;
-  border: 2px solid #000;
-  padding: 10px 14px;
-}
-
-.event-badge {
-  font-size: 10px;
-  color: var(--color-gold);
-  margin-bottom: 4px;
-}
-
-.event-time, .event-location {
-  font-size: 9px;
-  color: #ddd;
-  margin-top: 2px;
-}
-
-.dresscode-box {
-  background: #22222e;
-  border: 2px solid var(--color-border);
-  padding: 10px;
-}
-
-.dresscode-title {
-  font-size: 9px;
-  color: var(--color-gold-light);
-  margin-bottom: 6px;
-}
-
-.dresscode-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.tag {
-  background: var(--color-gold-dark);
-  color: #fff;
-  font-size: 8px;
-  padding: 4px 8px;
-  border: 1px solid #000;
-}
-
-/* RSVP Modal Styles */
-.rsvp-field-group {
-  margin-bottom: 14px;
-}
-
-.rsvp-field-group label {
-  display: block;
-  font-size: 10px;
-  color: var(--color-gold-light);
-  margin-bottom: 6px;
-}
-
-.rsvp-toggle-row {
-  display: flex;
-  gap: 8px;
-}
-
-.rsvp-btn, .group-btn {
-  flex: 1;
-  padding: 10px 6px;
-  font-family: var(--font-pixel);
-  font-size: 9px;
-  background: #2a2a38;
-  color: #aaa;
-  border: 2px solid #000;
-  cursor: pointer;
-}
-
-.rsvp-btn.active, .group-btn.active {
-  background: var(--color-gold);
-  color: #000;
-  border-color: #000;
-}
-
-.retro-select {
-  width: 100%;
-  padding: 8px;
-  font-family: var(--font-pixel);
-  font-size: 10px;
-  background: #2a2a38;
-  color: #fff;
-  border: 2px solid #000;
-}
-
-.seating-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
-}
-
-.seat-pill {
-  padding: 8px 6px;
-  font-family: var(--font-pixel);
-  font-size: 9px;
-  background: #2a2a38;
-  color: #aaa;
-  border: 2px solid #000;
-  cursor: pointer;
-  text-align: left;
-}
-
-.seat-pill.selected {
-  background: var(--color-gold-dark);
-  color: #fff;
-  border-color: var(--color-gold-light);
-}
-
-/* Wishes Modal Styles */
-.wishes-stream-container {
-  max-height: 200px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-  padding-right: 4px;
-}
-
-.wish-card {
-  background: #282836;
-  border: 2px solid #000;
-  padding: 8px 12px;
-}
-
-.wish-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.wish-author {
-  font-size: 10px;
-  color: var(--color-gold);
-}
-
-.wish-time {
-  font-size: 8px;
-  color: #777;
-}
-
-.wish-message {
-  font-size: 9px;
-  color: #ddd;
-  font-style: italic;
-}
-
-.wish-form-box {
-  background: #22222e;
-  border: 2px solid var(--color-border);
-  padding: 10px;
-}
-
-.retro-textarea {
-  width: 100%;
-  padding: 8px;
-  font-family: var(--font-pixel);
-  font-size: 9px;
-  background: #1a1a24;
-  color: #fff;
-  border: 2px solid #000;
-  resize: none;
-  margin-bottom: 8px;
-}
-
-/* Gift Modal Styles */
-.gift-subtitle {
-  font-size: 9px;
-  color: #aaa;
-  margin-bottom: 12px;
-  line-height: 1.4;
-}
-
-.gift-bank-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.bank-card {
-  background: #282836;
-  border: 2px solid #000;
-  padding: 10px 12px;
-}
-
-.bank-header {
-  display: flex;
-  justify-content: space-between;
-  font-size: 9px;
-  color: var(--color-gold-light);
-  margin-bottom: 6px;
-}
-
-.bank-acc-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.bank-number {
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: #fff;
-}
-
-.copy-acc-btn {
-  font-size: 8px;
-  padding: 4px 8px;
-}
-
-.qris-card {
-  background: #22222e;
-  border: 2px solid var(--color-border);
-  padding: 12px;
-  text-align: center;
-}
-
-.qris-title {
-  font-size: 10px;
-  color: var(--color-gold);
-  margin-bottom: 8px;
-}
-
-.qris-fake-code {
-  background: #fff;
-  color: #000;
-  padding: 16px;
-  border: 2px solid #000;
-  display: inline-block;
-}
-
-/* Crisp SVG Rules */
 svg {
   shape-rendering: crispEdges;
   image-rendering: pixelated;

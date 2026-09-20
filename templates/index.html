@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>The Wedding Adventure - Digital Invitation</title>
+  <title>The Wedding Adventure - 3D Hachi Garden</title>
   
   <!-- Fonts: Google Fonts with system fallback -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,17 @@
   
   <!-- Main Stylesheet -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+
+  <!-- Importmap for Three.js ES6 Modules -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
   <!-- Root App Mount -->

@@ -1,7 +1,7 @@
 import { gameState, PHASES } from './state/GameState.js';
 import { CoverView } from './views/CoverView.js';
 import { AvatarView } from './views/AvatarView.js';
-import { MapView } from './views/MapView.js';
+import { MapView3D } from './views/MapView3D.js';
 import { ModalsView } from './views/ModalsView.js';
 
 class App {
@@ -19,7 +19,7 @@ class App {
   }
 
   init() {
-    console.log('Bootstrapping Wedding Invitation Application...');
+    console.log('Bootstrapping Wedding Invitation Application (3D Hachi Garden)...');
     gameState.subscribe((state) => this.render(state));
     this.render(gameState.getState());
   }
@@ -57,7 +57,7 @@ class App {
 
         case PHASES.EXPLORATION:
           if (!this.mapView) {
-            this.mapView = new MapView();
+            this.mapView = new MapView3D();
           }
           this.uiLayer.appendChild(this.mapView.render());
           break;

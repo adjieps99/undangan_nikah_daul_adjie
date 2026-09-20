@@ -94,13 +94,28 @@ export class MapView3D {
       // Event listener for action button / key
       window.addEventListener('player-interact', this.handleInteractBound);
 
-      // Fade out loading overlay
+      // Fade out loading overlay & Trigger 3-Second Cinematic Reveal
       if (this.loadingOverlay) {
         this.loadingOverlay.style.opacity = '0';
         setTimeout(() => {
           if (this.loadingOverlay && this.loadingOverlay.parentNode) {
             this.loadingOverlay.parentNode.removeChild(this.loadingOverlay);
             this.loadingOverlay = null;
+          }
+
+          // Trigger Cinematic Camera Sweep
+          if (this.threeScene && this.threeScene.cameraController) {
+            this.threeScene.cameraController.startCinematicIntro(() => {
+              // Welcome Toast Banner on Cinematic Finish
+              const toast = document.createElement('div');
+              toast.className = 'retro-toast';
+              toast.innerHTML = `🌸 Selamat Datang di Hachi Garden 3D, <strong>${state.guestName}</strong>!`;
+              document.body.appendChild(toast);
+              setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 400);
+              }, 3000);
+            });
           }
         }, 300);
       }

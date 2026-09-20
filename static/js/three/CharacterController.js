@@ -109,16 +109,27 @@ export class CharacterController {
     this.animTime += 0.15;
     if (this.jumpCooldown > 0) this.jumpCooldown--;
 
-    // 1. Process Jump Physics
+    // 1. Process Jump Physics & Dynamic Shadow Scaling
     if (this.isJumping) {
       this.mesh.position.y += this.velocityY;
       this.velocityY += this.gravity;
+
+      // Dynamic Shadow Scaling (Shadow shrinks when jumping higher)
+      if (this.shadow) {
+        const shadowFactor = Math.max(0.3, 1.0 - (this.mesh.position.y / 2.5));
+        this.shadow.scale.set(shadowFactor, shadowFactor, shadowFactor);
+        this.shadow.material.opacity = 0.3 * shadowFactor;
+      }
 
       // Ground Touch Down
       if (this.mesh.position.y <= 0) {
         this.mesh.position.y = 0;
         this.isJumping = false;
         this.velocityY = 0;
+        if (this.shadow) {
+          this.shadow.scale.set(1, 1, 1);
+          this.shadow.material.opacity = 0.3;
+        }
       }
     }
 
@@ -134,10 +145,14 @@ export class CharacterController {
       if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = armAngle;
       if (this.avatar.head) this.avatar.head.position.y = 2.35 + Math.abs(Math.sin(this.animTime * 1.5)) * 0.05;
     } else {
-      // Idle Breathing Animation Cycle
+      // Natural Idle Breathing Animation Cycle
+      const breath = Math.sin(this.animTime * 0.4) * 0.04;
       if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = 0;
       if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
-      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = 0;
+      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = breath * 0.5;
+      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -breath * 0.5;
+      if (this.avatar.head) this.avatar.head.position.y = 2.35 + breath;
+    }
       if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = 0;
       if (this.avatar.head) this.avatar.head.position.y = 2.35 + Math.sin(this.animTime * 0.5) * 0.03;
     }

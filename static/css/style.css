@@ -772,3 +772,29 @@ svg {
   shape-rendering: crispEdges;
   image-rendering: pixelated;
 }
+
+/* Retro Welcome Toast Banner */
+.retro-toast {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--color-panel-bg);
+  border: 3px solid #000;
+  box-shadow: 4px 4px 0 #000;
+  padding: 10px 18px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  color: var(--color-gold-light);
+  z-index: 90;
+  text-align: center;
+  pointer-events: none;
+  animation: toastFadeIn 0.4s ease-out;
+  transition: opacity 0.4s ease;
+}
+
+@keyframes toastFadeIn {
+  from { transform: translate(-50%, -15px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+

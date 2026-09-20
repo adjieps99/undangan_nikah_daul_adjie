@@ -1298,10 +1298,77 @@ export class HachiGarden3D {
 
     this.petalsMesh = new THREE.Points(geometry, material);
     this.group.add(this.petalsMesh);
+
+    // Sunlight Gold Dust Particles
+    const dustCount = 40;
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPos = new Float32Array(dustCount * 3);
+
+    for (let i = 0; i < dustCount; i++) {
+      dustPos[i * 3] = (Math.random() - 0.5) * 40;
+      dustPos[i * 3 + 1] = Math.random() * 8 + 0.5;
+      dustPos[i * 3 + 2] = (Math.random() - 0.5) * 40;
+    }
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+
+    const dustMat = new THREE.PointsMaterial({
+      color: '#ffe082',
+      size: 0.25,
+      transparent: true,
+      opacity: 0.7
+    });
+
+    this.dustMesh = new THREE.Points(dustGeo, dustMat);
+    this.group.add(this.dustMesh);
+
+    this.buildButterflies();
+  }
+
+  buildButterflies() {
+    this.butterflies = [];
+    const butterflyColors = ['#ffb7c5', '#ffd166', '#a0c4ff'];
+
+    for (let i = 0; i < 3; i++) {
+      const bGroup = new THREE.Group();
+      const wingMat = new THREE.MeshLambertMaterial({
+        color: butterflyColors[i],
+        side: THREE.DoubleSide
+      });
+
+      // Left & Right Wings
+      const wingGeo = new THREE.BufferGeometry();
+      const vertices = new Float32Array([
+        0, 0, 0,
+        -0.3, 0.4, 0,
+        -0.4, 0.1, 0,
+        0, 0, 0,
+        0.3, 0.4, 0,
+        0.4, 0.1, 0
+      ]);
+      wingGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+
+      const wings = new THREE.Mesh(wingGeo, wingMat);
+      bGroup.add(wings);
+
+      // Random Initial Trajectory
+      const angle = (i * Math.PI * 2) / 3;
+      bGroup.position.set(Math.cos(angle) * 8, 2.5 + i * 0.5, Math.sin(angle) * 8);
+      this.group.add(bGroup);
+
+      this.butterflies.push({
+        mesh: bGroup,
+        wings: wings,
+        baseAngle: angle,
+        speed: 0.02 + i * 0.005,
+        time: i * 10
+      });
+    }
   }
 
   update() {
-    // Animate Petal Particles Drifting Slowly
+    this.animTime = (this.animTime || 0) + 0.03;
+
+    // 1. Animate Petal Particles Drifting Slowly
     if (this.petalsMesh) {
       const positions = this.petalsMesh.geometry.attributes.position.array;
       for (let i = 0; i < positions.length; i += 3) {
@@ -1313,6 +1380,32 @@ export class HachiGarden3D {
         }
       }
       this.petalsMesh.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // 2. Animate Sunlight Gold Dust Particles
+    if (this.dustMesh) {
+      const positions = this.dustMesh.geometry.attributes.position.array;
+      for (let i = 0; i < positions.length; i += 3) {
+        positions[i + 1] += Math.sin(this.animTime + i) * 0.005;
+        positions[i] += Math.cos(this.animTime + i) * 0.003;
+      }
+      this.dustMesh.geometry.attributes.position.needsUpdate = true;
+    }
+
+    // 3. Animate Fluttering Butterflies
+    if (this.butterflies) {
+      this.butterflies.forEach(b => {
+        b.time += b.speed;
+        const radius = 10 + Math.sin(b.time * 2) * 3;
+        b.mesh.position.x = Math.cos(b.time) * radius;
+        b.mesh.position.z = Math.sin(b.time) * radius;
+        b.mesh.position.y = 2.5 + Math.sin(b.time * 4) * 0.6;
+        b.mesh.rotation.y = -b.time + Math.PI / 2;
+
+        // Wing Flapping Animation
+        const flap = Math.sin(b.time * 25) * 0.6;
+        b.wings.scale.x = 0.5 + Math.abs(flap);
+      });
     }
   }
 }

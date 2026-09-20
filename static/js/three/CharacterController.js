@@ -9,6 +9,13 @@ export class CharacterController {
     this.isMoving = false;
     this.animTime = 0;
 
+    // Jump Physics
+    this.velocityY = 0;
+    this.gravity = -0.028;
+    this.jumpForce = 0.42;
+    this.isJumping = false;
+    this.jumpCooldown = 0;
+
     // Load Avatar3D
     const config = gameState.getState().playerConfig;
     this.avatar = new Avatar3D(config);
@@ -18,7 +25,7 @@ export class CharacterController {
 
     this.cachedConfigStr = JSON.stringify(config);
 
-    // Subscribe to avatar changes without unneeded mesh destruction
+    // Subscribe to avatar changes
     gameState.subscribe((state) => {
       const newConfigStr = JSON.stringify(state.playerConfig);
       if (newConfigStr !== this.cachedConfigStr) {
@@ -29,6 +36,19 @@ export class CharacterController {
         this.scene.add(this.mesh);
       }
     });
+
+    // Listen for jump event
+    window.addEventListener('player-jump', () => this.jump());
+  }
+
+  jump() {
+    // Disable jump if modal is active or already jumping or on cooldown
+    if (gameState.getState().activeModal) return;
+    if (!this.isJumping && this.jumpCooldown <= 0) {
+      this.isJumping = true;
+      this.velocityY = this.jumpForce;
+      this.jumpCooldown = 15; // Short cooldown frames
+    }
   }
 
   check3DCollision(x, z) {
@@ -53,7 +73,12 @@ export class CharacterController {
     return false;
   }
 
-  move(dx, dz) {
+  move(dx, dz, jumpInput = false) {
+    // Check jump input
+    if (jumpInput) {
+      this.jump();
+    }
+
     if (dx === 0 && dz === 0) {
       this.isMoving = false;
       return;
@@ -82,7 +107,22 @@ export class CharacterController {
 
   update() {
     this.animTime += 0.15;
+    if (this.jumpCooldown > 0) this.jumpCooldown--;
 
+    // 1. Process Jump Physics
+    if (this.isJumping) {
+      this.mesh.position.y += this.velocityY;
+      this.velocityY += this.gravity;
+
+      // Ground Touch Down
+      if (this.mesh.position.y <= 0) {
+        this.mesh.position.y = 0;
+        this.isJumping = false;
+        this.velocityY = 0;
+      }
+    }
+
+    // 2. Process Stride / Idle Animation
     if (this.isMoving) {
       // Walking Stride Animation Cycle
       const legAngle = Math.sin(this.animTime * 1.5) * 0.5;

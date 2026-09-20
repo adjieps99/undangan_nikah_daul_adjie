@@ -142,8 +142,8 @@ export class MapView3D {
 
     // Pause character movement input if a modal is currently open
     if (!activeModal && this.threeScene && this.threeScene.character && this.controls) {
-      const { dx, dy } = this.controls.getMovementVector();
-      this.threeScene.character.move(dx, dy);
+      const { dx, dy, jump } = this.controls.getMovementVector();
+      this.threeScene.character.move(dx, dy, jump);
     }
 
     this.animFrameId = requestAnimationFrame(() => this.updateControlsLoop());

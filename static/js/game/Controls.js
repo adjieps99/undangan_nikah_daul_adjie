@@ -5,10 +5,10 @@ export class Controls {
       down: false,
       left: false,
       right: false,
-      interact: false
+      interact: false,
+      jump: false
     };
 
-    this.touchVector = { x: 0, y: 0 };
     this.setupKeyboardListeners();
   }
 
@@ -32,8 +32,10 @@ export class Controls {
           this.keys.right = true;
           break;
         case 'e':
-        case ' ':
           this.keys.interact = true;
+          break;
+        case ' ':
+          this.keys.jump = true;
           break;
       }
     });
@@ -57,16 +59,30 @@ export class Controls {
           this.keys.right = false;
           break;
         case 'e':
-        case ' ':
           this.keys.interact = false;
+          break;
+        case ' ':
+          this.keys.jump = false;
           break;
       }
     });
   }
 
   createVirtualJoystick(container) {
+    const existing = container.querySelector('.virtual-joystick-wrapper');
+    if (existing) existing.remove();
+
     const joystickWrapper = document.createElement('div');
     joystickWrapper.className = 'virtual-joystick-wrapper';
+
+    // 1. D-Pad Group (Bottom Left)
+    const dpadGroup = document.createElement('div');
+    dpadGroup.className = 'dpad-group';
+
+    const moveLabel = document.createElement('div');
+    moveLabel.className = 'control-badge-label';
+    moveLabel.innerText = 'MOVE';
+    dpadGroup.appendChild(moveLabel);
 
     const dpad = document.createElement('div');
     dpad.className = 'virtual-dpad';
@@ -87,16 +103,38 @@ export class Controls {
       dpad.appendChild(btn);
     });
 
+    dpadGroup.appendChild(dpad);
+    joystickWrapper.appendChild(dpadGroup);
+
+    // 2. Action Buttons Group (Bottom Right)
+    const actionGroup = document.createElement('div');
+    actionGroup.className = 'action-group';
+
+    // Jump Button (Top right)
+    const jumpBtn = document.createElement('button');
+    jumpBtn.className = 'virtual-btn virtual-jump-btn';
+    jumpBtn.innerHTML = '<span>🦘</span><label>JUMP</label>';
+
+    const triggerJump = () => {
+      this.keys.jump = true;
+      setTimeout(() => { this.keys.jump = false; }, 150);
+      window.dispatchEvent(new CustomEvent('player-jump'));
+    };
+
+    jumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerJump(); });
+    jumpBtn.addEventListener('click', (e) => { e.preventDefault(); triggerJump(); });
+    actionGroup.appendChild(jumpBtn);
+
+    // Interact / Action Button (Bottom right)
     const interactBtn = document.createElement('button');
-    interactBtn.className = 'virtual-action-btn';
-    interactBtn.innerText = 'E';
-    interactBtn.title = 'Interact';
+    interactBtn.className = 'virtual-btn virtual-action-btn';
+    interactBtn.innerHTML = '<span>✨</span><label>ACTION</label>';
 
     interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.triggerInteract(); });
     interactBtn.addEventListener('click', (e) => { e.preventDefault(); this.triggerInteract(); });
+    actionGroup.appendChild(interactBtn);
 
-    joystickWrapper.appendChild(dpad);
-    joystickWrapper.appendChild(interactBtn);
+    joystickWrapper.appendChild(actionGroup);
     container.appendChild(joystickWrapper);
   }
 
@@ -119,6 +157,6 @@ export class Controls {
       dy *= 0.7071;
     }
 
-    return { dx, dy };
+    return { dx, dy, jump: this.keys.jump };
   }
 }

@@ -153,9 +153,6 @@ export class CharacterController {
       if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -breath * 0.5;
       if (this.avatar.head) this.avatar.head.position.y = 2.35 + breath;
     }
-      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = 0;
-      if (this.avatar.head) this.avatar.head.position.y = 2.35 + Math.sin(this.animTime * 0.5) * 0.03;
-    }
   }
 
   getPosition() {

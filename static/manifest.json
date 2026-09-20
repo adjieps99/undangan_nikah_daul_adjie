@@ -1,0 +1,16 @@
+{
+  "name": "The Wedding Adventure - Digital RPG Invitation",
+  "short_name": "WeddingRPG",
+  "description": "Retro 2D RPG Digital Wedding Invitation of Adjie & Daul Gembul",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121218",
+  "theme_color": "#d4af37",
+  "icons": [
+    {
+      "src": "/static/css/style.css",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

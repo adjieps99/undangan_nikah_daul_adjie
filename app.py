@@ -9,6 +9,14 @@ except ImportError:
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.environ.get('SECRET_KEY', 'hachi-garden-3d-wedding-secret-key-2026')
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '-1'
+    return response
 
 @app.route('/')
 def index():
@@ -19,7 +27,7 @@ def health_check():
     return jsonify({
         "status": "ok",
         "app": "Hachi Garden 3D Wedding Venue",
-        "version": "2.0.0",
+        "version": "2.0.1",
         "environment": os.environ.get('FLASK_ENV', 'production')
     }), 200
 
@@ -36,4 +44,3 @@ if __name__ == '__main__':
     debug_mode = os.environ.get('FLASK_ENV') == 'development'
     print(f"Wedding Invitation Server running at http://0.0.0.0:{port} (debug={debug_mode})")
     app.run(host='0.0.0.0', port=port, debug=debug_mode)
-

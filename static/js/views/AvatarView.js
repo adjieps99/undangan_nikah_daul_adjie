@@ -7,6 +7,7 @@ export class AvatarView {
   constructor(onConfirm) {
     this.onConfirm = onConfirm;
     this.activeTab = 'hair'; // 'hair' | 'skin' | 'outfit' | 'accessory'
+    this.container = null;
   }
 
   render() {
@@ -218,10 +219,11 @@ export class AvatarView {
   }
 
   refresh() {
-    if (this.container && this.container.parentElement) {
-      const parent = this.container.parentElement;
+    const oldContainer = this.container;
+    if (oldContainer && oldContainer.parentElement) {
+      const parent = oldContainer.parentElement;
       const newElem = this.render();
-      parent.replaceChild(newElem, this.container);
+      parent.replaceChild(newElem, oldContainer);
     }
   }
 }

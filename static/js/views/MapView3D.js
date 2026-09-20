@@ -41,18 +41,19 @@ export class MapView3D {
     });
 
     hudBar.querySelector('.hud-share-btn').addEventListener('click', () => {
+      const shareUrl = window.location.href;
       const shareData = {
         title: 'The Wedding Adventure - Adjie & Daul Gembul',
-        text: `Undangan Pernikahan 3D Hachi Garden Adjie & Daul Gembul!`,
-        url: window.location.href
+        text: 'Undangan Pernikahan 3D Hachi Garden Adjie & Daul Gembul!',
+        url: shareUrl
       };
 
-      if (navigator.share) {
-        navigator.share(shareData).catch(() => {});
-      } else {
-        navigator.clipboard.writeText(window.location.href).then(() => {
-          alert('Link Undangan berhasil disalin ke clipboard!');
+      if (navigator.share && window.isSecureContext) {
+        navigator.share(shareData).catch(() => {
+          this.copyShareLinkFallback(shareUrl);
         });
+      } else {
+        this.copyShareLinkFallback(shareUrl);
       }
     });
 
@@ -167,6 +168,22 @@ export class MapView3D {
   handleInteraction() {
     if (this.threeScene && this.threeScene.interactionSystem) {
       this.threeScene.interactionSystem.triggerInteraction();
+    }
+  }
+
+  copyShareLinkFallback(shareUrl) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(shareUrl).then(() => {
+          alert('📋 Link Undangan berhasil disalin!');
+        }).catch(() => {
+          prompt('Salin Link Undangan:', shareUrl);
+        });
+      } else {
+        prompt('Salin Link Undangan:', shareUrl);
+      }
+    } catch (e) {
+      prompt('Salin Link Undangan:', shareUrl);
     }
   }
 

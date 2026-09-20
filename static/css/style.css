@@ -540,9 +540,9 @@ html, body {
 /* --- MOBILE VIRTUAL CONTROLS REDESIGN --- */
 .virtual-joystick-wrapper {
   position: absolute;
-  bottom: 24px;
-  left: 20px;
-  right: 20px;
+  bottom: max(46px, calc(env(safe-area-inset-bottom) + 26px));
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
   display: flex;
   justify-content: space-between;
   align-items: flex-end;

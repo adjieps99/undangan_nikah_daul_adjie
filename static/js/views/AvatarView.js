@@ -13,8 +13,8 @@ export class AvatarView {
     const state = gameState.getState();
     const config = state.playerConfig;
 
-    const viewContainer = document.createElement('div');
-    viewContainer.className = 'avatar-view-container';
+    this.container = document.createElement('div');
+    this.container.className = 'avatar-view-container';
 
     // Title Box
     const header = document.createElement('div');
@@ -23,7 +23,7 @@ export class AvatarView {
       <h2 class="retro-sub-title">CHARACTER CREATOR</h2>
       <p style="font-size: 11px; opacity: 0.8; margin-top: 4px;">Sesuaikan Avatar RPG Pernikahan Anda</p>
     `;
-    viewContainer.appendChild(header);
+    this.container.appendChild(header);
 
     // Layout Split: Preview Left | Selector Right
     const mainGrid = document.createElement('div');
@@ -48,7 +48,10 @@ export class AvatarView {
       text: '🎲 RANDOMIZE',
       variant: 'secondary',
       className: 'avatar-rand-btn',
-      onClick: () => this.randomizeConfig()
+      onClick: () => {
+        this.randomizeConfig();
+        this.refresh();
+      }
     });
     previewBox.appendChild(randBtn);
 
@@ -75,7 +78,7 @@ export class AvatarView {
       tabBtn.innerText = tab.label;
       tabBtn.addEventListener('click', () => {
         this.activeTab = tab.id;
-        this.updateDOM(viewContainer);
+        this.refresh();
       });
       tabsRow.appendChild(tabBtn);
     });
@@ -89,7 +92,7 @@ export class AvatarView {
     panelBox.appendChild(optionsContent);
 
     mainGrid.appendChild(panelBox);
-    viewContainer.appendChild(mainGrid);
+    this.container.appendChild(mainGrid);
 
     // Footer Actions
     const actionsRow = document.createElement('div');
@@ -107,9 +110,9 @@ export class AvatarView {
     });
 
     actionsRow.appendChild(confirmBtn);
-    viewContainer.appendChild(actionsRow);
+    this.container.appendChild(actionsRow);
 
-    return viewContainer;
+    return this.container;
   }
 
   renderTabContent() {
@@ -125,6 +128,7 @@ export class AvatarView {
         btn.title = item.label;
         btn.addEventListener('click', () => {
           gameState.updatePlayerConfig({ skinColor: item.value });
+          this.refresh();
         });
         content.appendChild(btn);
       });
@@ -142,6 +146,7 @@ export class AvatarView {
         pill.innerText = style.label;
         pill.addEventListener('click', () => {
           gameState.updatePlayerConfig({ hairStyle: style.id });
+          this.refresh();
         });
         styleGrid.appendChild(pill);
       });
@@ -163,6 +168,7 @@ export class AvatarView {
         swatch.title = color.label;
         swatch.addEventListener('click', () => {
           gameState.updatePlayerConfig({ hairColor: color.value });
+          this.refresh();
         });
         colorGrid.appendChild(swatch);
       });
@@ -175,6 +181,7 @@ export class AvatarView {
         pill.innerText = outfit.label;
         pill.addEventListener('click', () => {
           gameState.updatePlayerConfig({ outfit: outfit.id });
+          this.refresh();
         });
         content.appendChild(pill);
       });
@@ -185,6 +192,7 @@ export class AvatarView {
         pill.innerText = acc.label;
         pill.addEventListener('click', () => {
           gameState.updatePlayerConfig({ accessory: acc.id });
+          this.refresh();
         });
         content.appendChild(pill);
       });
@@ -209,10 +217,11 @@ export class AvatarView {
     });
   }
 
-  updateDOM(container) {
-    const parent = container.parentElement;
-    if (parent) {
-      parent.replaceChild(this.render(), container);
+  refresh() {
+    if (this.container && this.container.parentElement) {
+      const parent = this.container.parentElement;
+      const newElem = this.render();
+      parent.replaceChild(newElem, this.container);
     }
   }
 }

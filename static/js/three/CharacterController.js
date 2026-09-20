@@ -30,9 +30,14 @@ export class CharacterController {
       const newConfigStr = JSON.stringify(state.playerConfig);
       if (newConfigStr !== this.cachedConfigStr) {
         this.cachedConfigStr = newConfigStr;
+        const currentPos = this.mesh ? this.mesh.position.clone() : new THREE.Vector3(0, 0, 5);
+        const currentRot = this.mesh ? this.mesh.rotation.y : 0;
+
         this.scene.remove(this.mesh);
         this.avatar = new Avatar3D(state.playerConfig);
         this.mesh = this.avatar.group;
+        this.mesh.position.copy(currentPos);
+        this.mesh.rotation.y = currentRot;
         this.scene.add(this.mesh);
       }
     });

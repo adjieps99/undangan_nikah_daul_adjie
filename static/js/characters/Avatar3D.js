@@ -91,32 +91,92 @@ export class Avatar3D {
     this.buildHair(hairStyle, hairMat);
 
     // 8. Accessory Layer
-    if (accessory === 'crown') {
-      const crownGeo = new THREE.ConeGeometry(0.4, 0.4, 5);
-      const crownMat = new THREE.MeshLambertMaterial({ color: '#d4af37' });
-      const crown = new THREE.Mesh(crownGeo, crownMat);
-      crown.position.set(0, 2.85, 0);
-      this.group.add(crown);
-    }
+    this.buildAccessory(accessory);
   }
 
   buildHair(style, hairMat) {
     if (style === 'cap') {
-      const capGeo = new THREE.BoxGeometry(0.7, 0.2, 0.7);
+      const capGeo = new THREE.BoxGeometry(0.72, 0.22, 0.72);
       const cap = new THREE.Mesh(capGeo, hairMat);
-      cap.position.set(0, 2.7, 0);
+      cap.position.set(0, 2.72, 0);
       this.group.add(cap);
+
+      const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.06, 0.3), hairMat);
+      capBrim.position.set(0, 2.62, 0.35);
+      this.group.add(capBrim);
     } else if (style === 'hijab') {
-      const hijabGeo = new THREE.BoxGeometry(0.75, 0.8, 0.75);
-      const hijabMat = new THREE.MeshLambertMaterial({ color: '#e2e8f0' });
+      const hijabMat = new THREE.MeshLambertMaterial({ color: '#f5f5f7' });
+      const hijabGeo = new THREE.BoxGeometry(0.78, 0.85, 0.78);
       const hijab = new THREE.Mesh(hijabGeo, hijabMat);
-      hijab.position.set(0, 2.35, -0.05);
+      hijab.position.set(0, 2.35, -0.04);
       this.group.add(hijab);
+
+      const chestCover = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.4, 0.52), hijabMat);
+      chestCover.position.set(0, 1.7, 0.05);
+      this.group.add(chestCover);
+    } else if (style === 'long') {
+      const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.3, 0.72), hairMat);
+      hairTop.position.set(0, 2.72, 0);
+      this.group.add(hairTop);
+
+      const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.72, 1.0, 0.2), hairMat);
+      hairBack.position.set(0, 2.1, -0.32);
+      this.group.add(hairBack);
+    } else if (style === 'bun') {
+      const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.28, 0.72), hairMat);
+      hairTop.position.set(0, 2.72, 0);
+      this.group.add(hairTop);
+
+      const bunBun = new THREE.Mesh(new THREE.DodecahedronGeometry(0.25), hairMat);
+      bunBun.position.set(0, 2.98, -0.15);
+      this.group.add(bunBun);
+    } else if (style === 'wavy') {
+      const hairTop = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.35, 0.74), hairMat);
+      hairTop.position.set(0, 2.72, 0);
+      this.group.add(hairTop);
+
+      const sideSweep = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.5), hairMat);
+      sideSweep.position.set(0.35, 2.1, 0.05);
+      this.group.add(sideSweep);
     } else {
-      const hairGeo = new THREE.BoxGeometry(0.7, 0.3, 0.7);
+      // Short hair default
+      const hairGeo = new THREE.BoxGeometry(0.72, 0.3, 0.72);
       const hair = new THREE.Mesh(hairGeo, hairMat);
-      hair.position.set(0, 2.7, -0.02);
+      hair.position.set(0, 2.72, -0.02);
       this.group.add(hair);
+    }
+  }
+
+  buildAccessory(accessory) {
+    if (accessory === 'crown') {
+      const crownMat = new THREE.MeshLambertMaterial({ color: '#d4af37' });
+      const crownGeo = new THREE.ConeGeometry(0.35, 0.35, 5);
+      const crown = new THREE.Mesh(crownGeo, crownMat);
+      crown.position.set(0, 2.92, 0);
+      this.group.add(crown);
+    } else if (accessory === 'glasses') {
+      const glassMat = new THREE.MeshBasicMaterial({ color: '#111111' });
+      const frameLeft = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.15, 0.05), glassMat);
+      frameLeft.position.set(-0.16, 2.4, 0.35);
+      const frameRight = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.15, 0.05), glassMat);
+      frameRight.position.set(0.16, 2.4, 0.35);
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.04, 0.05), glassMat);
+      bridge.position.set(0, 2.4, 0.35);
+
+      this.group.add(frameLeft);
+      this.group.add(frameRight);
+      this.group.add(bridge);
+    } else if (accessory === 'flower') {
+      const flowerMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
+      const flowerCenter = new THREE.MeshLambertMaterial({ color: '#ffd166' });
+
+      const flower = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14), flowerMat);
+      flower.position.set(0.36, 2.65, 0.2);
+      const center = new THREE.Mesh(new THREE.DodecahedronGeometry(0.06), flowerCenter);
+      center.position.set(0.38, 2.65, 0.28);
+
+      this.group.add(flower);
+      this.group.add(center);
     }
   }
 }

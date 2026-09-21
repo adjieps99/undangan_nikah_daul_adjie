@@ -27,7 +27,7 @@ def health_check():
     return jsonify({
         "status": "ok",
         "app": "Hachi Garden 3D Wedding Venue",
-        "version": "2.0.1",
+        "version": "2.0.2",
         "environment": os.environ.get('FLASK_ENV', 'production')
     }), 200
 

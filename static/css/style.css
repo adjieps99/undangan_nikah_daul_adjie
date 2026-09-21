@@ -540,9 +540,9 @@ html, body {
 /* --- MOBILE VIRTUAL CONTROLS REDESIGN --- */
 .virtual-joystick-wrapper {
   position: absolute;
-  bottom: max(46px, calc(env(safe-area-inset-bottom) + 26px));
-  left: max(16px, env(safe-area-inset-left));
-  right: max(16px, env(safe-area-inset-right));
+  bottom: max(26px, calc(env(safe-area-inset-bottom) + 20px));
+  left: max(20px, env(safe-area-inset-left));
+  right: max(20px, env(safe-area-inset-right));
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -550,61 +550,58 @@ html, body {
   z-index: 20;
 }
 
-.dpad-group {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  pointer-events: auto;
-}
-
-.control-badge-label {
-  font-size: 8px;
-  color: var(--color-gold-light);
-  letter-spacing: 1px;
-  text-shadow: 1px 1px #000;
-}
-
-.virtual-dpad {
-  display: grid;
-  grid-template-columns: repeat(3, 56px);
-  grid-template-rows: repeat(3, 56px);
-  gap: 4px;
-  background: rgba(18, 18, 24, 0.75);
-  padding: 6px;
-  border: 2px solid var(--color-gold-dark);
-  border-radius: 8px;
-}
-
-.dpad-btn {
-  background: rgba(30, 30, 45, 0.9);
-  border: 2px solid var(--color-gold);
-  color: #fff;
-  font-family: var(--font-pixel);
-  font-size: 14px;
-  cursor: pointer;
+/* Analog Joystick Touch Area & Base */
+.joystick-touch-area {
+  position: relative;
+  width: 140px;
+  height: 140px;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 2px 2px 0 #000;
-  border-radius: 4px;
+  pointer-events: auto;
 }
 
-.dpad-btn:active {
-  background: var(--color-gold);
-  color: #000;
+.virtual-joystick-base {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, rgba(20, 20, 30, 0.45) 100%);
+  border: 2px solid rgba(212, 175, 55, 0.5);
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.2), inset 0 0 10px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.dpad-up { grid-column: 2; grid-row: 1; }
-.dpad-left { grid-column: 1; grid-row: 2; }
-.dpad-right { grid-column: 3; grid-row: 2; }
-.dpad-down { grid-column: 2; grid-row: 3; }
+.virtual-joystick-base.idle {
+  opacity: 0.45;
+}
+
+.virtual-joystick-base.active {
+  opacity: 0.95;
+  border-color: rgba(255, 215, 0, 0.85);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4), inset 0 0 12px rgba(212, 175, 55, 0.3);
+}
+
+.virtual-joystick-thumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #fff8f0 0%, #e6c8a2 60%, #d4af37 100%);
+  border: 2px solid #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4), 0 0 8px rgba(255, 255, 255, 0.6);
+  transition: transform 0.04s ease-out;
+  pointer-events: none;
+}
 
 .action-group {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   pointer-events: auto;
 }
 
@@ -613,19 +610,21 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  border: 3px solid #000;
-  box-shadow: 3px 3px 0 #000;
+  border: 2px solid rgba(212, 175, 55, 0.7);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   cursor: pointer;
   font-family: var(--font-pixel);
+  backdrop-filter: blur(6px);
+  transition: transform 0.15s ease, opacity 0.2s ease, background 0.2s ease;
 }
 
 .virtual-jump-btn {
-  width: 54px;
-  height: 54px;
+  width: 58px;
+  height: 58px;
   border-radius: 50%;
-  background: #3a3a4c;
+  background: rgba(45, 45, 60, 0.75);
   color: #fff;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .virtual-jump-btn label {
@@ -637,16 +636,31 @@ html, body {
 
 .virtual-jump-btn:active {
   transform: scale(0.92);
-  background: var(--color-gold-dark);
+  background: rgba(212, 175, 55, 0.85);
+  color: #000;
 }
 
 .virtual-action-btn {
-  width: 72px;
-  height: 72px;
+  width: 76px;
+  height: 76px;
   border-radius: 50%;
-  background: var(--color-gold);
+  background: radial-gradient(circle at 30% 30%, #ffd700 0%, #d4af37 70%, #997a15 100%);
   color: #000;
-  font-size: 20px;
+  font-size: 22px;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.5), 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.virtual-action-btn label {
+  font-size: 8px;
+  font-weight: bold;
+  margin-top: 2px;
+  color: #000;
+  cursor: pointer;
+}
+
+.virtual-action-btn:active {
+  transform: scale(0.92);
+  background: #ffb703;
 }
 
 .virtual-action-btn label {
@@ -791,6 +805,17 @@ svg {
   pointer-events: none;
   animation: toastFadeIn 0.4s ease-out;
   transition: opacity 0.4s ease;
+}
+
+.tutorial-hint-toast {
+  top: 70px;
+  background: rgba(24, 24, 34, 0.95);
+  border: 2px solid var(--color-gold);
+  border-radius: 8px;
+  padding: 12px 20px;
+  min-width: 260px;
+  font-family: var(--font-sans);
+  backdrop-filter: blur(8px);
 }
 
 @keyframes toastFadeIn {

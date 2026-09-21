@@ -9,6 +9,11 @@ export class Controls {
       jump: false
     };
 
+    // Joystick Vector State
+    this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
+    this.isJoystickActive = false;
+    this.touchId = null;
+
     this.setupKeyboardListeners();
   }
 
@@ -75,42 +80,129 @@ export class Controls {
     const joystickWrapper = document.createElement('div');
     joystickWrapper.className = 'virtual-joystick-wrapper';
 
-    // 1. D-Pad Group (Bottom Left)
-    const dpadGroup = document.createElement('div');
-    dpadGroup.className = 'dpad-group';
+    // 1. Analog Joystick Base & Thumb Knob (Bottom Left)
+    const joystickArea = document.createElement('div');
+    joystickArea.className = 'joystick-touch-area';
 
-    const moveLabel = document.createElement('div');
-    moveLabel.className = 'control-badge-label';
-    moveLabel.innerText = 'MOVE';
-    dpadGroup.appendChild(moveLabel);
+    const joystickBase = document.createElement('div');
+    joystickBase.className = 'virtual-joystick-base idle';
 
-    const dpad = document.createElement('div');
-    dpad.className = 'virtual-dpad';
+    const joystickThumb = document.createElement('div');
+    joystickThumb.className = 'virtual-joystick-thumb';
+    joystickBase.appendChild(joystickThumb);
 
-    const dirs = ['up', 'left', 'right', 'down'];
-    dirs.forEach(dir => {
-      const btn = document.createElement('button');
-      btn.className = `dpad-btn dpad-${dir}`;
-      btn.innerText = dir === 'up' ? '▲' : dir === 'down' ? '▼' : dir === 'left' ? '◄' : '►';
+    joystickArea.appendChild(joystickBase);
+    joystickWrapper.appendChild(joystickArea);
 
-      const setDir = (val) => { this.keys[dir] = val; };
+    // Joystick Touch Drag Event Logic
+    const maxRadius = 45; // Maximum pixel displacement from base center
+    let baseCenter = { x: 0, y: 0 };
 
-      btn.addEventListener('touchstart', (e) => { e.preventDefault(); setDir(true); });
-      btn.addEventListener('touchend', (e) => { e.preventDefault(); setDir(false); });
-      btn.addEventListener('mousedown', (e) => { e.preventDefault(); setDir(true); });
-      btn.addEventListener('mouseup', (e) => { e.preventDefault(); setDir(false); });
+    const handleStart = (clientX, clientY, identifier = null) => {
+      this.touchId = identifier;
+      this.isJoystickActive = true;
+      joystickBase.classList.remove('idle');
+      joystickBase.classList.add('active');
 
-      dpad.appendChild(btn);
+      const rect = joystickBase.getBoundingClientRect();
+      baseCenter = {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2
+      };
+
+      handleMove(clientX, clientY);
+    };
+
+    const handleMove = (clientX, clientY) => {
+      if (!this.isJoystickActive) return;
+
+      let deltaX = clientX - baseCenter.x;
+      let deltaY = clientY - baseCenter.y;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      // Clamp thumb movement within maxRadius
+      const clampedDistance = Math.min(distance, maxRadius);
+      const angle = Math.atan2(deltaY, deltaX);
+
+      const thumbX = Math.cos(angle) * clampedDistance;
+      const thumbY = Math.sin(angle) * clampedDistance;
+
+      joystickThumb.style.transform = `translate(${thumbX}px, ${thumbY}px)`;
+
+      // Normalized direction vector & intensity (0.0 to 1.0)
+      const intensity = clampedDistance / maxRadius;
+      this.joystickVector = {
+        dx: distance > 5 ? Math.cos(angle) : 0,
+        dy: distance > 5 ? Math.sin(angle) : 0,
+        intensity: intensity
+      };
+    };
+
+    const handleEnd = () => {
+      this.isJoystickActive = false;
+      this.touchId = null;
+      joystickBase.classList.remove('active');
+      joystickBase.classList.add('idle');
+
+      joystickThumb.style.transform = `translate(0px, 0px)`;
+      this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
+    };
+
+    // Touch Event Listeners for Mobile
+    joystickArea.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      if (this.touchId !== null) return;
+      const touch = e.changedTouches[0];
+      handleStart(touch.clientX, touch.clientY, touch.identifier);
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!this.isJoystickActive) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.touchId) {
+          handleMove(e.changedTouches[i].clientX, e.changedTouches[i].clientY);
+          break;
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', (e) => {
+      if (!this.isJoystickActive) return;
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === this.touchId) {
+          handleEnd();
+          break;
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchcancel', (e) => {
+      if (this.isJoystickActive) handleEnd();
+    }, { passive: true });
+
+    // Mouse Fallback for testing in Browser DevTools
+    let isMouseDown = false;
+    joystickArea.addEventListener('mousedown', (e) => {
+      isMouseDown = true;
+      handleStart(e.clientX, e.clientY);
     });
 
-    dpadGroup.appendChild(dpad);
-    joystickWrapper.appendChild(dpadGroup);
+    window.addEventListener('mousemove', (e) => {
+      if (isMouseDown) handleMove(e.clientX, e.clientY);
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (isMouseDown) {
+        isMouseDown = false;
+        handleEnd();
+      }
+    });
 
     // 2. Action Buttons Group (Bottom Right)
     const actionGroup = document.createElement('div');
     actionGroup.className = 'action-group';
 
-    // Jump Button (Top right)
+    // Jump Button
     const jumpBtn = document.createElement('button');
     jumpBtn.className = 'virtual-btn virtual-jump-btn';
     jumpBtn.innerHTML = '<span>🦘</span><label>JUMP</label>';
@@ -125,7 +217,7 @@ export class Controls {
     jumpBtn.addEventListener('click', (e) => { e.preventDefault(); triggerJump(); });
     actionGroup.appendChild(jumpBtn);
 
-    // Interact / Action Button (Bottom right)
+    // Action / Interact Button
     const interactBtn = document.createElement('button');
     interactBtn.className = 'virtual-btn virtual-action-btn';
     interactBtn.innerHTML = '<span>✨</span><label>ACTION</label>';
@@ -145,18 +237,28 @@ export class Controls {
   getMovementVector() {
     let dx = 0;
     let dy = 0;
+    let intensity = 0;
 
+    // Check keyboard input first
     if (this.keys.left) dx -= 1;
     if (this.keys.right) dx += 1;
     if (this.keys.up) dy -= 1;
     if (this.keys.down) dy += 1;
 
-    // Normalize diagonal speed
-    if (dx !== 0 && dy !== 0) {
-      dx *= 0.7071;
-      dy *= 0.7071;
+    if (dx !== 0 || dy !== 0) {
+      if (dx !== 0 && dy !== 0) {
+        dx *= 0.7071;
+        dy *= 0.7071;
+      }
+      intensity = 1.0;
+    } else if (this.isJoystickActive && this.joystickVector.intensity > 0.05) {
+      // Use Analog Virtual Joystick vector
+      dx = this.joystickVector.dx;
+      dy = this.joystickVector.dy;
+      intensity = this.joystickVector.intensity;
     }
 
-    return { dx, dy, jump: this.keys.jump };
+    return { dx, dy, intensity, jump: this.keys.jump };
   }
 }
+

@@ -56,29 +56,61 @@ export class CharacterController {
     }
   }
 
+  isWalkableZone(x, z) {
+    // 1. Main Vertical Runway Path (Width: 8 -> Radius: 4.2, Length: -40 to 40)
+    if (Math.abs(x) <= 4.2 && z >= -40 && z <= 40) return true;
+
+    // 2. Top Horizontal Cross Path (Width: 6 -> Radius: 3.2, Length: -32 to 32, Z: -15)
+    if (z >= -18.2 && z <= -11.8 && x >= -32 && x <= 32) return true;
+
+    // 3. Bottom Horizontal Cross Path (Width: 6 -> Radius: 3.2, Length: -32 to 32, Z: 15)
+    if (z >= 11.8 && z <= 18.2 && x >= -32 && x <= 32) return true;
+
+    // 4. Gazebo Plaza Zone (Center: -15, -15, Radius: 6.6)
+    if (Math.hypot(x - (-15), z - (-15)) <= 6.6) return true;
+
+    // 5. Reception Plaza Zone (Center: 15, -15, Radius: 5.8)
+    if (Math.hypot(x - 15, z - (-15)) <= 5.8) return true;
+
+    // 6. Wishing Tree Plaza Zone (Center: -12, 15, Radius: 5.8)
+    if (Math.hypot(x - (-12), z - 15) <= 5.8) return true;
+
+    // 7. Fountain Pond Plaza Zone (Center: 12, 15, Radius: 6.0)
+    if (Math.hypot(x - 12, z - 15) <= 6.0) return true;
+
+    // 8. Entrance Archway Runway (Z: 25 to 35, X: -4.2 to 4.2)
+    if (z >= 25 && z <= 35 && Math.abs(x) <= 4.2) return true;
+
+    return false;
+  }
+
   check3DCollision(x, z) {
     // 1. Boundary Clamp (-45 to 45)
     if (x < -45 || x > 45 || z < -45 || z > 45) return true;
 
-    // 2. Gazebo Structure (Center: -15, -15, Radius: 5.2)
-    if (Math.hypot(x - (-15), z - (-15)) < 5.2) return true;
+    // 2. Walkable Path & Plaza Boundary Check (Invisible Walls)
+    if (!this.isWalkableZone(x, z)) return true;
 
-    // 3. Reception Table & Cake (Center: 15, -15, Radius: 3.8)
-    if (Math.hypot(x - 15, z - (-15)) < 3.8) return true;
+    // 3. Solid Obstacle Collisions inside Walkable Plazas:
+    // Gazebo Structure Center (Center: -15, -15, Radius: 4.8)
+    if (Math.hypot(x - (-15), z - (-15)) < 4.8) return true;
 
-    // 4. Wishing Tree Trunk (Center: -12, 15, Radius: 2.2)
-    if (Math.hypot(x - (-12), z - 15) < 2.2) return true;
+    // Reception Table (Center: 15, -15, Radius: 2.8)
+    if (Math.hypot(x - 15, z - (-15)) < 2.8) return true;
 
-    // 5. Fountain Pond (Center: 12, 15, Radius: 4.6)
-    if (Math.hypot(x - 12, z - 15) < 4.6) return true;
+    // Wishing Tree Trunk (Center: -12, 15, Radius: 2.0)
+    if (Math.hypot(x - (-12), z - 15) < 2.0) return true;
 
-    // 6. Archway Pillars (x: -4 to -3.5 or 3.5 to 4 at z: 30)
+    // Fountain Pond Basin (Center: 12, 15, Radius: 3.8)
+    if (Math.hypot(x - 12, z - 15) < 3.8) return true;
+
+    // Archway Pillars (x: -4 to -3.5 or 3.5 to 4 at z: 30)
     if (z > 29.2 && z < 30.8 && (Math.abs(x - (-4)) < 0.6 || Math.abs(x - 4) < 0.6)) return true;
 
     return false;
   }
 
-  move(dx, dz, jumpInput = false) {
+  move(dx, dz, intensity = 1.0, jumpInput = false) {
     // Check jump input
     if (jumpInput) {
       this.jump();
@@ -91,10 +123,15 @@ export class CharacterController {
 
     this.isMoving = true;
 
-    const nextX = this.mesh.position.x + dx * this.speed;
-    const nextZ = this.mesh.position.z + dz * this.speed;
+    // Intensity-based movement speed scaling (cozy walking curve)
+    // 20% drag = slow walk, 60% = normal walk, 100% = fast walk
+    const clampedIntensity = Math.max(0.1, Math.min(1.0, intensity));
+    const currentSpeed = this.speed * (0.35 + 0.65 * clampedIntensity);
 
-    // Obstacle Collision Check on X and Z axis
+    const nextX = this.mesh.position.x + dx * currentSpeed;
+    const nextZ = this.mesh.position.z + dz * currentSpeed;
+
+    // Obstacle Collision & Invisible Wall Check on X and Z axis
     if (!this.check3DCollision(nextX, this.mesh.position.z)) {
       this.mesh.position.x = nextX;
     }
@@ -102,12 +139,12 @@ export class CharacterController {
       this.mesh.position.z = nextZ;
     }
 
-    // Smooth Rotation towards Movement Angle
+    // Smooth Character Rotation (Lerp angle for natural Sims feel)
     const targetRotation = Math.atan2(dx, dz);
     let diff = targetRotation - this.mesh.rotation.y;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
-    this.mesh.rotation.y += diff * 0.2;
+    this.mesh.rotation.y += diff * 0.18;
   }
 
   update() {

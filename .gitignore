@@ -1,0 +1,5 @@
+scratch/ 
+undangan/ 
+venv/ 
+__pycache__/ 
+.env

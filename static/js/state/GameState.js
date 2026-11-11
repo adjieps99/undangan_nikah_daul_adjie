@@ -29,6 +29,7 @@ class GameState {
     this.state = {
       gamePhase: this.getInitialPhaseFromURL(),
       guestName: this.getGuestNameFromURL(),
+      guestCategory: this.getGuestCategoryFromURL(),
       playerConfig: {
         gender: 'male', // 'male' | 'female'
         skinColor: '#F1C27D',
@@ -43,6 +44,12 @@ class GameState {
       rsvpData: this.loadRSVP(),
       audioState: { isBgmPlaying: false, isMuted: false }
     };
+  }
+
+  getGuestCategoryFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const cat = (params.get('cat') || params.get('category') || params.get('group') || 'A').toUpperCase().trim();
+    return cat === 'B' ? 'B' : 'A';
   }
 
   getInitialModalFromURL() {

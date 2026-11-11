@@ -21,8 +21,8 @@ export class AvatarView {
     const header = document.createElement('div');
     header.className = 'avatar-header';
     header.innerHTML = `
-      <h2 class="retro-sub-title">CHARACTER CREATOR</h2>
-      <p style="font-size: 11px; opacity: 0.8; margin-top: 4px;">Sesuaikan Avatar RPG Pernikahan Anda</p>
+      <h2 class="retro-sub-title" style="letter-spacing: 1.5px; font-size: 16px;">DESAIN AVATAR KAMU DULU, YUK!</h2>
+      <p style="font-size: 11px; color: #ffbe97; margin-top: 4px;">Pilih penampilan terbaikmu untuk menjelajahi kebun pernikahan Adjie &amp; Daulika</p>
     `;
     this.container.appendChild(header);
 
@@ -46,7 +46,7 @@ export class AvatarView {
 
     // Randomize Button
     const randBtn = createRetroButton({
-      text: '🎲 RANDOMIZE',
+      text: '🎲 ACAK GAYA',
       variant: 'secondary',
       className: 'avatar-rand-btn',
       onClick: () => {
@@ -67,10 +67,10 @@ export class AvatarView {
     tabsRow.className = 'avatar-tabs-row';
 
     const tabs = [
-      { id: 'skin', label: 'SKIN' },
-      { id: 'hair', label: 'HAIR' },
-      { id: 'outfit', label: 'OUTFIT' },
-      { id: 'accessory', label: 'EXTRA' }
+      { id: 'skin', label: 'KULIT' },
+      { id: 'hair', label: 'RAMBUT' },
+      { id: 'outfit', label: 'PAKAIAN' },
+      { id: 'accessory', label: 'AKSESORIS' }
     ];
 
     tabs.forEach(tab => {
@@ -100,7 +100,7 @@ export class AvatarView {
     actionsRow.className = 'avatar-actions-row';
 
     const confirmBtn = createRetroButton({
-      text: 'READY TO EXPLORE MAP 🚀',
+      text: 'MASUK KE GARDEN 🌸',
       onClick: () => {
         if (typeof this.onConfirm === 'function') {
           this.onConfirm();

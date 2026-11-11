@@ -49,12 +49,15 @@ export function createWishesModal() {
         if (response.ok && resData.status === 'ok') {
           saveLocalWish(resData.wish);
           formBox.querySelector('#wish-input').value = '';
+          errorBanner.style.display = 'none';
           loadWishes(wishesListContainer);
         } else {
-          alert(`Gagal mengirim ucapan: ${resData.message || 'Terjadi kesalahan.'}`);
+          errorBanner.textContent = `Gagal mengirim ucapan: ${resData.message || 'Terjadi kesalahan.'}`;
+          errorBanner.style.display = 'block';
         }
       } catch (err) {
-        alert('Koneksi terputus saat mengirim ucapan. Silakan coba lagi.');
+        errorBanner.textContent = 'Koneksi terputus saat mengirim ucapan. Silakan coba lagi.';
+        errorBanner.style.display = 'block';
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = '💌 KIRIM UCAPAN';
@@ -62,6 +65,9 @@ export function createWishesModal() {
     }
   });
 
+  const errorBanner = document.createElement('div');
+  errorBanner.style.cssText = 'display: none; margin-top: 8px; font-size: 11px; color: #ff8888; text-align: center;';
+  formBox.appendChild(errorBanner);
   formBox.appendChild(submitBtn);
   content.appendChild(wishesListContainer);
   content.appendChild(formBox);

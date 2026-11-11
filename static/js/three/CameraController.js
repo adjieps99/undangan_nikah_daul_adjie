@@ -216,9 +216,13 @@ export class CameraController {
       }
     }
 
-    const curOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * safeRadius;
-    const curOffsetY = Math.sin(this.pitch) * safeRadius;
-    const curOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * safeRadius;
+    // Smoothly adapt spring-arm radius to prevent abrupt camera pops near walls
+    if (typeof this.currentRadius !== 'number') this.currentRadius = radius;
+    this.currentRadius += (safeRadius - this.currentRadius) * 0.18;
+
+    const curOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * this.currentRadius;
+    const curOffsetY = Math.sin(this.pitch) * this.currentRadius;
+    const curOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * this.currentRadius;
 
     // Optical focus target: aim at avatar torso/chest (y + 1.15 on portrait, y + 0.75 on landscape)
     const lookYOffset = aspect < 1.0 ? 1.15 : 0.75;
@@ -245,8 +249,8 @@ export class CameraController {
 
       this.camera.position.lerpVectors(this.cinematicStartPos, desiredCameraPos, easeT);
 
-      const currentLook = new THREE.Vector3().lerpVectors(this.cinematicTargetLook, targetLook, easeT);
-      this.camera.lookAt(currentLook);
+      const cinematicLook = new THREE.Vector3().lerpVectors(this.cinematicTargetLook, targetLook, easeT);
+      this.camera.lookAt(cinematicLook);
 
       if (t >= 1.0) {
         this.isCinematic = false;
@@ -255,13 +259,20 @@ export class CameraController {
       return;
     }
 
-    // Smooth lerp follow
+    // Smooth lerp follow for position
     if (this.camera.position.lengthSq() < 0.1) {
       this.camera.position.copy(desiredCameraPos);
     } else {
       this.camera.position.lerp(desiredCameraPos, this.damping);
     }
-    this.camera.lookAt(targetLook);
+
+    // Smooth lerp for look-at target to eliminate micro-jitter on rapid turns & stair traversal
+    if (!this.currentLook) {
+      this.currentLook = targetLook.clone();
+    } else {
+      this.currentLook.lerp(targetLook, this.damping * 1.5);
+    }
+    this.camera.lookAt(this.currentLook);
   }
 }
 

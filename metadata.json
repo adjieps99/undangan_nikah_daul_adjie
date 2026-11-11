@@ -1,0 +1,8 @@
+{
+  "name": "The Wedding Adventure - 3D Hachi Garden",
+  "description": "Interactive 3D wedding invitation and venue exploration in Hachi Garden for Adjie & Daul with RSVP, guestbook wishes, and seat reservations.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

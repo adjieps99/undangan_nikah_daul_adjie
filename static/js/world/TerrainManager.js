@@ -25,10 +25,10 @@ export class TerrainManager {
       return 3.2;
     }
 
-    // Staircase 3: Connecting Central Terrace (y=2.0, x=-8.0) up to Food Court (y=3.2, x=-14.0)
-    // Runs along x in [-14.0, -8.0], z in [-6.5, -1.5]
-    if (x <= -8.0 && x >= -14.0 && z >= -6.5 && z <= -1.5) {
-      const t = (-8.0 - x) / 6.0; // 0.0 at x=-8.0, 1.0 at x=-14.0
+    // Staircase 3: Connecting Central Terrace (y=2.0, x=-8.0) up to Food Court (y=3.2, x=-14.5)
+    // Runs along x in [-14.5, -8.0], z in [-6.8, -1.2]
+    if (x <= -8.0 && x >= -14.5 && z >= -6.8 && z <= -1.2) {
+      const t = (-8.0 - x) / 6.5; // 0.0 at x=-8.0, 1.0 at x=-14.5
       return 2.0 + Math.max(0, Math.min(1, t)) * (3.2 - 2.0);
     }
 
@@ -87,9 +87,12 @@ export class TerrainManager {
     if (Math.hypot(x - (-24), z - 8) <= 6.5) return true;
 
     // 6. West Secondary Path to Food Court & Staircase 3
-    if (x >= -14.0 && x <= -3.0 && z >= -6.5 && z <= -1.5) return true;
-    // Food Court Walkway & Dining Deck (x: -32 to -14, z: -16 to -4)
-    if (x >= -32.0 && x <= -14.0 && z >= -16.0 && z <= -4.0) return true;
+    // Main pathway connector & Staircase 3 (x: -15.5 to -3.0, z: -7.0 to -1.0)
+    if (x >= -15.5 && x <= -3.0 && z >= -7.0 && z <= -1.0) return true;
+    // Food Court Landing Platform / Bordes & Connector Walkway (x: -20.0 to -14.0, z: -9.5 to -1.0)
+    if (x >= -20.0 && x <= -14.0 && z >= -9.5 && z <= -1.0) return true;
+    // Food Court Walkway & Dining Deck (x: -34 to -14, z: -17 to -4)
+    if (x >= -34.0 && x <= -14.0 && z >= -17.0 && z <= -4.0) return true;
 
     // 7. East Secondary Path to Photo Gallery (x: 2.5 to 24, z: 5.5 to 10.5)
     if (x >= 2.5 && x <= 24.0 && z >= 5.5 && z <= 10.5) return true;

@@ -47,6 +47,7 @@ export class HachiGarden3D {
     this.buildInstancedTeaBushes();
     this.buildTropicalBlossomTrees();
     this.buildPathwayLanterns();
+    this.buildListeningStationPathwayFeatures();
 
     // 3. Cultural & Architectural Landmarks
     this.gardenEntrance = new GardenEntrance(); // Landmark 1
@@ -464,12 +465,13 @@ export class HachiGarden3D {
     // 7 steps, dx = -0.857, dy = 0.171, dz = 0, width = 4.2
     addStaircase(-8.5, 2.18, -4.0, 7, -0.857, 0.171, 0, 4.2);
 
-    // Approach walkway connecting top of stairs (x = -14.5) to Food Court deck with seamless corner junction
-    addPathSegment(-16.5, 3.2, -4.0, 4.2, 4.2, 'z');
-    addPathSegment(-18.0, 3.2, -7.5, 4.2, 7.2, 'x');
+    // Architectural Landing Platform (Bordes) at top of Staircase 3 with stone pavement
+    addDestinationPlaza(-15.5, 3.2, -4.0, 3.4, 16);
+    addPathSegment(-16.5, 3.2, -4.0, 4.8, 4.4, 'z');
+    addPathSegment(-18.5, 3.2, -7.5, 4.4, 7.6, 'x');
 
-    // Food Court Forecourt Landing (connecting into the 12m x 9m dining deck)
-    addDestinationPlaza(-20.0, 3.2, -10.0, 4.8, 20);
+    // Food Court Forecourt Landing (connecting seamlessly into the 12m x 9m dining deck)
+    addDestinationPlaza(-20.0, 3.2, -10.0, 5.2, 22);
 
     // -------------------------------------------------------------
     // 5. SECONDARY PATHWAY: PHOTO GALLERY & COUPLE PROFILE (EAST WING, y = 2.0)
@@ -716,6 +718,151 @@ export class HachiGarden3D {
 
       this.group.add(lantern);
     });
+  }
+
+  buildListeningStationPathwayFeatures() {
+    // -------------------------------------------------------------
+    // ENHANCED PATHWAY TO LANDMARK 3 (LISTENING STATION, x = -2.5 to -24.0, z = 8.0)
+    // - Dressed stone borders and curb stones
+    // - Vibrant flowering shrubs (Hydrangeas, Azaleas, Lavender)
+    // - Pathway lanterns with warm amber glow
+    // - Organic flagstone stepping stones
+    // - Directional carved wooden signpost pointing to Listening Station
+    // -------------------------------------------------------------
+    const curbMat = new THREE.MeshLambertMaterial({ color: '#4a3f35' });
+    const woodPostMat = new THREE.MeshLambertMaterial({ color: '#543824' });
+    const woodBoardMat = new THREE.MeshLambertMaterial({ color: '#8a5c36' });
+    const amberGlowMat = new THREE.MeshLambertMaterial({ color: '#ffe494', emissive: 0xffaa22 });
+
+    // Shrub Flower Materials
+    const hydrangeaMat = new THREE.MeshLambertMaterial({ color: '#7ba4e8' }); // Soft blue
+    const azaleaMat = new THREE.MeshLambertMaterial({ color: '#ff6b8b' });    // Vibrant pink
+    const lavenderMat = new THREE.MeshLambertMaterial({ color: '#9c7ae8' });  // Violet spires
+    const foliageMat = new THREE.MeshLambertMaterial({ color: '#2d6a2e' });   // Lush green leaves
+
+    // Helper: Build a beautiful flowering shrub
+    const createFloweringShrub = (x, y, z, type = 'hydrangea', scale = 1.0) => {
+      const shrub = new THREE.Group();
+      shrub.position.set(x, y, z);
+      shrub.scale.set(scale, scale, scale);
+
+      // Main foliage mound
+      const leafMound = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55), foliageMat);
+      leafMound.position.y = 0.35;
+      shrub.add(leafMound);
+
+      const flowerMat = type === 'azalea' ? azaleaMat : (type === 'lavender' ? lavenderMat : hydrangeaMat);
+      const blossomCount = type === 'lavender' ? 8 : 6;
+
+      for (let b = 0; b < blossomCount; b++) {
+        const angle = (b * Math.PI * 2) / blossomCount;
+        const rad = 0.32 + Math.random() * 0.12;
+        const bx = Math.cos(angle) * rad;
+        const bz = Math.sin(angle) * rad;
+        const by = 0.35 + Math.sin(b * 1.5) * 0.18;
+
+        if (type === 'lavender') {
+          // Lavender spire
+          const spire = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 5), flowerMat);
+          spire.position.set(bx, by + 0.12, bz);
+          shrub.add(spire);
+        } else {
+          // Rounded blossom clusters
+          const bloom = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), flowerMat);
+          bloom.position.set(bx, by, bz);
+          shrub.add(bloom);
+        }
+      }
+
+      this.group.add(shrub);
+    };
+
+    // 1. Flowering Shrubs along Pathway Edges (North flank z = 5.6, South flank z = 10.4)
+    // Upper tier (y = 2.0, x: -3.5 to -8.0)
+    createFloweringShrub(-4.0, 2.0, 5.5, 'hydrangea', 0.95);
+    createFloweringShrub(-6.0, 2.0, 5.4, 'azalea', 1.05);
+    createFloweringShrub(-7.8, 2.0, 5.5, 'lavender', 0.9);
+    createFloweringShrub(-4.0, 2.0, 10.5, 'azalea', 1.0);
+    createFloweringShrub(-6.0, 2.0, 10.6, 'hydrangea', 1.1);
+    createFloweringShrub(-7.8, 2.0, 10.5, 'lavender', 0.95);
+
+    // Lower tier along approach corridor (y = 1.0, x: -14.0 to -19.0)
+    createFloweringShrub(-14.5, 1.0, 5.5, 'lavender', 1.0);
+    createFloweringShrub(-16.2, 1.0, 5.4, 'hydrangea', 1.15);
+    createFloweringShrub(-18.0, 1.0, 5.5, 'azalea', 1.05);
+    createFloweringShrub(-14.5, 1.0, 10.5, 'hydrangea', 0.95);
+    createFloweringShrub(-16.2, 1.0, 10.6, 'azalea', 1.1);
+    createFloweringShrub(-18.0, 1.0, 10.5, 'lavender', 1.0);
+
+    // Flanking the Listening Station Plaza entrance (x = -19.5 to -24.0)
+    createFloweringShrub(-20.2, 1.0, 4.2, 'hydrangea', 1.2);
+    createFloweringShrub(-21.8, 1.0, 3.4, 'azalea', 1.1);
+    createFloweringShrub(-20.2, 1.0, 11.8, 'azalea', 1.2);
+    createFloweringShrub(-21.8, 1.0, 12.6, 'hydrangea', 1.1);
+
+    // 2. Continuous Raised Stone Curbs flanking the Walkway
+    const addCurbBorder = (startX, endX, z, y) => {
+      const len = Math.abs(endX - startX);
+      const midX = (startX + endX) / 2;
+      const curb = new THREE.Mesh(new THREE.BoxGeometry(len, 0.12, 0.16), curbMat);
+      curb.position.set(midX, y + 0.06, z);
+      this.group.add(curb);
+    };
+
+    addCurbBorder(-2.5, -8.3, 5.9, 2.0);
+    addCurbBorder(-2.5, -8.3, 10.1, 2.0);
+    addCurbBorder(-13.7, -19.2, 5.9, 1.0);
+    addCurbBorder(-13.7, -19.2, 10.1, 1.0);
+
+    // 3. Organic Flagstone Stepping Stones Flanking the Approach
+    const stepMat = new THREE.MeshLambertMaterial({ color: '#b8ab96' });
+    const steppingStonePositions = [
+      { x: -19.2, z: 7.2, y: 1.0 },
+      { x: -20.2, z: 6.6, y: 1.0 },
+      { x: -21.2, z: 6.2, y: 1.0 },
+      { x: -19.2, z: 8.8, y: 1.0 },
+      { x: -20.2, z: 9.4, y: 1.0 },
+      { x: -21.2, z: 9.8, y: 1.0 }
+    ];
+
+    steppingStonePositions.forEach((sp, i) => {
+      const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.42, 0.05, 7), stepMat);
+      stone.position.set(sp.x, sp.y + 0.025, sp.z);
+      stone.rotation.y = (i * 0.7);
+      this.group.add(stone);
+    });
+
+    // 4. Directional Carved Wooden Signpost at Central Junction
+    // Junction corner: x = -3.2, y = 2.0, z = 5.2
+    const signpost = new THREE.Group();
+    signpost.position.set(-3.2, 2.0, 5.2);
+
+    // Vertical wooden post
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.2, 8), woodPostMat);
+    post.position.y = 1.1;
+    signpost.add(post);
+
+    // Cross directional arm pointing West towards Listening Station
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.28, 0.08), woodBoardMat);
+    arm.position.set(-0.35, 1.85, 0);
+    signpost.add(arm);
+
+    // Pointed arrow tip on the West end
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.32, 4), woodBoardMat);
+    tip.position.set(-1.05, 1.85, 0);
+    tip.rotation.z = Math.PI / 2;
+    signpost.add(tip);
+
+    // Amber lantern hanging from signpost arm
+    const lampChain = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.24, 4), curbMat);
+    lampChain.position.set(-0.7, 1.58, 0);
+    signpost.add(lampChain);
+
+    const miniLamp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.22), amberGlowMat);
+    miniLamp.position.set(-0.7, 1.34, 0);
+    signpost.add(miniLamp);
+
+    this.group.add(signpost);
   }
 
   buildFloatingPetalParticles() {

@@ -7,9 +7,9 @@ export const WEDDING_DATA = {
   couple: {
     groom: {
       name: 'Adjie',
-      fullName: 'Adjie S. Prasetyo',
-      parents: 'Putra tercinta dari Bpk. Bambang & Ibu Sri',
-      bio: 'Pencinta teknologi, kopi senja, dan petualangan alam yang kini menemukan pelabuhan hatinya.',
+      fullName: 'Adjie Prasatia Sakti',
+      parents: 'Putra tercinta dari Bpk. Muhammad Saleh & Ibu Sri Ratni',
+      bio: 'Pencinta petualangan, secangkir kopi hangat, dan dunia imajinatif yang menemukan rumah sejatinya di senyuman Daulika.',
       avatarConfig: {
         gender: 'male',
         skinColor: '#F1C27D',
@@ -20,64 +20,51 @@ export const WEDDING_DATA = {
       }
     },
     bride: {
-      name: 'Daul',
-      fullName: 'Daul Gembul Permata',
-      parents: 'Putri tercinta dari Bpk. Rahmat & Ibu Endang',
-      bio: 'Penyuka seni, kebun bunga, dan kuliner lezat yang siap menapaki babak baru bersama Adjie.',
+      name: 'Daulika',
+      fullName: 'Daulika Pratiwi',
+      parents: 'Putri tercinta dari Bpk. Achmad Agussalim & Ibu Ratu Rachmi Utari',
+      bio: 'Pencinta bunga, kehangatan cerita kecil, dan kuliner lezat yang siap menapaki setiap lembar masa depan berdampingan dengan Adjie.',
       avatarConfig: {
         gender: 'female',
         skinColor: '#FFDBAC',
-        hairStyle: 'hijab',
+        hairStyle: 'bun',
         hairColor: '#1A1A24',
-        outfit: 'traditional_gold',
+        outfit: 'dress',
         accessory: 'flower'
       }
     },
-    quote: '"Dua jiwa, satu takdir. Di bawah langit senja Hachi Garden, kami memulai kisah abadi kami."'
+    quote: '"Sebuah taman kecil yang kami bangun bersama, dari tawa, cerita, dan doa yang ingin kami bagi denganmu."'
   },
   schedule: {
-    akad: {
-      title: 'AKAD NIKAH',
-      time: 'Sabtu, 28 November 2026 | 08.00 - 10.00 WIB',
-      location: 'The Hachi Garden Pergola'
-    },
-    resepsi: {
-      title: 'RESEPSI PERNIKAHAN',
-      time: 'Sabtu, 28 November 2026 | 11.00 - 14.00 WIB',
-      location: 'The Hachi Garden Restaurant'
+    event: {
+      title: 'AKAD NIKAH & RAMAH TAMAH',
+      date: 'Sabtu, 5 Desember 2026',
+      time: '08.30 - 13.00 WIB',
+      location: 'The Hachi Garden Ampera'
     }
   },
   venue: {
-    name: 'The Hachi Garden Restaurant',
-    address: 'Jl. Kaliurang Km 9, Sleman, Yogyakarta',
-    mapsUrl: 'https://maps.google.com'
+    name: 'The Hachi Garden Ampera',
+    address: 'Jl. Ampera Raya No. 129, Pasar Minggu, Jakarta Selatan',
+    mapsUrl: 'https://maps.app.goo.gl/JgJMgK3bS5mcspb26'
   },
-  story: [
-    { year: '2022', title: 'Pertemuan Pertama', desc: 'Pertama kali bertegur sapa di sebuah kafe sederhana saat senja.' },
-    { year: '2024', title: 'Perjalanan & Cerita', desc: 'Menjelajahi kebun teh, menikmati mie ayam favorit, dan saling menguatkan mimpi.' },
-    { year: '2026', title: 'Menuju Pelaminan', desc: 'Mengikat janji suci di hadapan keluarga dan sahabat tercinta di Hachi Garden.' }
-  ],
   playlist: [
-    { title: 'Semenjak Ada Dirimu', artist: 'Yovie & Nuno', duration: '4:12' },
-    { title: 'Teman Hidup', artist: 'Tulus', duration: '3:45' },
-    { title: 'Hingga Tua Bersama', artist: 'Rizky Febian', duration: '4:02' },
-    { title: 'Kisah Romantis', artist: 'Glenn Fredly', duration: '3:50' },
-    { title: 'Janji Suci', artist: 'Yovie & Nuno', duration: '3:20' }
+    { id: 1, title: 'Langit Merah Muda', artist: 'Afgan', duration: '3:45', isDefault: true },
+    { id: 2, title: 'Rona Merah Langit', artist: 'Kunto Aji', duration: '4:12' },
+    { id: 3, title: 'Ikat Aku Ditulang Belikatmu', artist: 'Sal Priadi', duration: '3:58' },
+    { id: 4, title: 'Begini Begitu', artist: "Maliq & D'Essentials", duration: '3:35' },
+    { id: 5, title: 'Just You', artist: 'Teddy Adhitya', duration: '3:48' }
   ],
   favorites: [
-    { item: 'Mie Ayam Jamur Spesial', note: 'Menu kencan pertama kami yang tak pernah gagal membawa senyum.' },
-    { item: 'Es Kopi Susu Gula Aren', note: 'Teman setia ngobrol berjam-jam tentang masa depan.' },
-    { item: 'Pisang Goreng Keju Karamel', note: 'Cemilan wajib saat menikmati udara sejuk kebun teh.' }
+    { item: 'Mie Ayam Jamur Spesial', note: 'Menu kencan favorit kami yang selalu membawa kehangatan cerita.' },
+    { item: 'Es Kopi Susu Gula Aren', note: 'Teman setia ngobrol berjam-jam tentang mimpi dan masa depan.' },
+    { item: 'Pisang Goreng Keju Karamel', note: 'Cemilan manis wajib saat menikmati sore santai bersama.' }
   ],
-  dressCode: {
-    title: 'DRESS CODE',
-    tags: ['Batik Modern', 'Traditional Gold', 'Earth Tone & Pastel']
-  },
   gift: {
-    subtitle: 'Doa restu Anda adalah hadiah terindah. Bagi yang ingin memberikan tanda kasih secara digital:',
+    subtitle: 'Doa restu dari Anda adalah hadiah paling berharga bagi kami. Bagi keluarga dan sahabat yang ingin memberikan tanda kasih secara digital:',
     accounts: [
-      { bank: 'Bank Saqu', number: '1098234712', holder: 'Adjie S. Prasetyo' },
-      { bank: 'Bank BCA', number: '8720194812', holder: 'Daul Gembul Permata' }
+      { bank: 'Bank Saqu', number: '1098234712', holder: 'Adjie Prasatia Sakti' },
+      { bank: 'Bank BCA', number: '8720194812', holder: 'Daulika Pratiwi' }
     ],
     qrisText: 'SCAN VIA GOPAY / OVO / DANA / QRIS'
   }

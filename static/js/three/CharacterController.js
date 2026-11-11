@@ -124,26 +124,34 @@ export class CharacterController {
     this.velocityY = 0;
     this.isJumping = false;
 
-    // Cushion y is ~0.44m. Avatar hip is at y=0.98.
-    // Placing mesh at seatY - 0.56 aligns thighs and seat pad flush.
+    // Chair cushion is at seatY ~0.44m. Avatar hip is at y=0.98.
+    // Placing mesh at seatY - 0.46 aligns thighs and seat pad flush with feet on floor.
     const seatY = typeof seatPos.y === 'number' ? seatPos.y : 0.44;
-    this.mesh.position.set(seatPos.x, seatY - 0.56, seatPos.z);
+    this.mesh.position.set(seatPos.x, seatY - 0.46, seatPos.z);
     this.mesh.rotation.y = faceAngle;
 
-    if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = -Math.PI / 2;
-    if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = -Math.PI / 2;
-    if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = -0.55;
-    if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -0.55;
+    if (typeof this.avatar.setSitting === 'function') {
+      this.avatar.setSitting(true);
+    } else {
+      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = -Math.PI / 2;
+      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = -Math.PI / 2;
+      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = -0.55;
+      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -0.55;
+    }
   }
 
   standUp(standOffset = null) {
     if (!this.isSitting) return;
     this.isSitting = false;
 
-    if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = 0;
-    if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
-    if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = 0;
-    if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = 0;
+    if (typeof this.avatar.setSitting === 'function') {
+      this.avatar.setSitting(false);
+    } else {
+      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = 0;
+      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
+      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = 0;
+      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = 0;
+    }
 
     if (standOffset) {
       this.mesh.position.add(standOffset);
@@ -199,6 +207,13 @@ export class CharacterController {
     const clampedIntensity = Math.max(0.1, Math.min(1.0, intensity));
     const currentSpeed = this.speed * (0.35 + 0.65 * clampedIntensity);
 
+    // Normalize movement direction so diagonal travel has identical uniform velocity
+    const moveLen = Math.hypot(moveDirX, moveDirZ);
+    if (moveLen > 0.0001) {
+      moveDirX /= moveLen;
+      moveDirZ /= moveLen;
+    }
+
     const nextX = this.mesh.position.x + moveDirX * currentSpeed;
     const nextZ = this.mesh.position.z + moveDirZ * currentSpeed;
 
@@ -223,7 +238,7 @@ export class CharacterController {
       // Gentle breathing animation while sitting
       this.animTime += 0.05;
       const breath = Math.sin(this.animTime * 0.4) * 0.02;
-      if (this.avatar.head) this.avatar.head.position.y = 2.25 + breath;
+      if (this.avatar.head) this.avatar.head.position.y = 2.14 + breath;
       return;
     }
 
@@ -249,7 +264,7 @@ export class CharacterController {
       if (Math.abs(diffY) < 0.02) {
         this.mesh.position.y = groundY;
       } else {
-        this.mesh.position.y += diffY * 0.55;
+        this.mesh.position.y += diffY * 0.45;
       }
     }
 
@@ -262,11 +277,22 @@ export class CharacterController {
       const legAngle = Math.sin(tAnim) * 0.45;
       const armAngle = Math.sin(tAnim) * 0.38;
 
+      // Dispatch footstep audio event on stride zero-crossing
+      if (!this.isJumping) {
+        const curPhase = Math.sin(tAnim);
+        if (typeof this.prevStepPhase === 'number') {
+          if ((this.prevStepPhase <= 0 && curPhase > 0) || (this.prevStepPhase >= 0 && curPhase < 0)) {
+            window.dispatchEvent(new CustomEvent('player-step'));
+          }
+        }
+        this.prevStepPhase = curPhase;
+      }
+
       if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = legAngle;
       if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = -legAngle;
       if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = -armAngle;
       if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = armAngle;
-      if (this.avatar.head) this.avatar.head.position.y = 2.25 + Math.abs(Math.sin(tAnim)) * 0.03;
+      if (this.avatar.head) this.avatar.head.position.y = 2.14 + Math.abs(Math.sin(tAnim)) * 0.03;
     } else {
       // Natural Idle Breathing Animation Cycle
       const breath = Math.sin(this.animTime * 0.4) * 0.03;
@@ -274,7 +300,7 @@ export class CharacterController {
       if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
       if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = breath * 0.4;
       if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -breath * 0.4;
-      if (this.avatar.head) this.avatar.head.position.y = 2.25 + breath;
+      if (this.avatar.head) this.avatar.head.position.y = 2.14 + breath;
     }
   }
 

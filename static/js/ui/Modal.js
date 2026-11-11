@@ -1,6 +1,6 @@
 import { gameState, MODALS } from '../state/GameState.js';
 
-export function createModal({ id = 'modal', title = 'Modal Title', content = '', onClose = null }) {
+export function createModal({ id = 'modal', title = 'Modal Title', content = '', onClose = null, hideCloseBtn = false }) {
   const backdrop = document.createElement('div');
   backdrop.className = 'modal-backdrop';
 
@@ -42,10 +42,11 @@ export function createModal({ id = 'modal', title = 'Modal Title', content = '',
   // Expose cleanup function on backdrop DOM node for host lifecycle managers
   backdrop._cleanup = handleClose;
 
-  closeBtn.addEventListener('click', handleClose);
-
   header.appendChild(titleEl);
-  header.appendChild(closeBtn);
+  if (!hideCloseBtn) {
+    closeBtn.addEventListener('click', handleClose);
+    header.appendChild(closeBtn);
+  }
   modalContainer.appendChild(header);
 
   // Body

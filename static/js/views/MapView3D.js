@@ -2,6 +2,8 @@ import { gameState, PHASES } from '../state/GameState.js';
 import { ThreeScene } from '../three/ThreeScene.js';
 import { Controls } from '../game/Controls.js';
 import { generateAvatarSVG } from '../svg/AvatarSVG.js';
+import { audioSystem } from '../game/AudioSystem.js';
+import { POI_REGISTRY_3D } from '../three/InteractionSystem.js';
 
 export class MapView3D {
   constructor() {
@@ -28,8 +30,11 @@ export class MapView3D {
         <div class="hud-avatar-thumb">${generateAvatarSVG(state.playerConfig, 36)}</div>
         <div class="hud-guest-name"></div>
       </div>
-      <div class="hud-title desktop-only">HACHI GARDEN — INDONESIAN DREAMSCAPE</div>
-      <div class="hud-actions" style="display: flex; gap: 6px;">
+      <div class="hud-title desktop-only">ADJIE &amp; DAULIKA — THE HACHI GARDEN</div>
+      <div class="hud-actions" style="display: flex; gap: 6px; align-items: center;">
+        <button class="retro-btn retro-btn-secondary hud-audio-btn" title="Musik & Efek Suara" style="padding: 6px 10px; font-size: 14px; min-width: 38px;">
+          ${audioSystem.isMuted ? '🔇' : '🔊'}
+        </button>
         <button class="retro-btn retro-btn-secondary hud-avatar-btn">✏️ EDIT AVATAR</button>
       </div>
     `;
@@ -39,12 +44,29 @@ export class MapView3D {
       hudNameEl.textContent = state.guestName;
     }
 
+    const audioBtn = hudBar.querySelector('.hud-audio-btn');
+    if (audioBtn) {
+      audioBtn.addEventListener('click', () => {
+        const isMuted = audioSystem.toggleMute();
+        audioBtn.textContent = isMuted ? '🔇' : '🔊';
+      });
+    }
+
     hudBar.querySelector('.hud-avatar-btn').addEventListener('click', () => {
       this.destroy();
       gameState.setPhase(PHASES.AVATAR_CREATOR);
     });
 
     container.appendChild(hudBar);
+
+    // 1b. In-Game Navigation Radar / Compass Bar
+    this.radarBar = document.createElement('div');
+    this.radarBar.className = 'hud-radar-strip';
+    this.radarBar.innerHTML = `
+      <span class="radar-pulse">🧭</span>
+      <span class="radar-label">Mencari petunjuk arah...</span>
+    `;
+    container.appendChild(this.radarBar);
 
     // 2. WebGL Canvas Container
     const canvasWrapper = document.createElement('div');
@@ -155,6 +177,29 @@ export class MapView3D {
       if (gameState.getState().activeModal) {
         this.promptEl.classList.add('hidden');
         return;
+      }
+
+      // Real-time Navigation Radar indicator update
+      if (this.radarBar && this.threeScene && this.threeScene.character) {
+        const charPos = this.threeScene.character.getPosition();
+        let closestPOI = null;
+        let minDistance = Infinity;
+
+        for (const p of POI_REGISTRY_3D) {
+          const dist = Math.hypot(charPos.x - p.x, charPos.z - p.z);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestPOI = p;
+          }
+        }
+
+        if (closestPOI) {
+          const distInt = Math.round(minDistance);
+          const radarLabel = this.radarBar.querySelector('.radar-label');
+          if (radarLabel) {
+            radarLabel.innerHTML = `${closestPOI.icon} <strong>${closestPOI.name}</strong> • ${distInt}m`;
+          }
+        }
       }
 
       const poi = this.threeScene.interactionSystem.nearbyPOI;
@@ -301,6 +346,7 @@ export class MapView3D {
   }
 
   handleInteraction() {
+    window.dispatchEvent(new CustomEvent('modal-open'));
     if (this.threeScene && this.threeScene.interactionSystem) {
       this.threeScene.interactionSystem.triggerInteraction();
     }

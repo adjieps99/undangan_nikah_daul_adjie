@@ -69,9 +69,74 @@ export class FoodCourt {
 
     // 6. Warm Hanging Pendant Lanterns (elevated at y = 4.0m)
     [-3, 0, 3].forEach(lx => {
-      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), lampMat);
-      lamp.position.set(lx, 4.0, 0);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), lampMat);
+      lamp.position.set(lx, 3.8, 0);
       this.group.add(lamp);
+    });
+
+    // 7. Menu Board Signboard Texture & Heading
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#1c1b18';
+      ctx.fillRect(0, 0, 512, 128);
+      ctx.strokeStyle = '#d4af37';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(6, 6, 500, 116);
+      ctx.fillStyle = '#f5e6a3';
+      ctx.font = 'bold 26px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('🍜 KULINER FAVORIT KAMI ☕', 256, 48);
+      ctx.fillStyle = '#ffbe97';
+      ctx.font = '18px sans-serif';
+      ctx.fillText('Mie Ayam Jamur • Es Kopi Aren • Pisang Karamel', 256, 88);
+    }
+    const boardTex = new THREE.CanvasTexture(canvas);
+    const signBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 1.1, 0.1),
+      new THREE.MeshLambertMaterial({ map: boardTex })
+    );
+    signBoard.position.set(0, 3.0, -3.6);
+    this.group.add(signBoard);
+
+    // 8. Culinary Props on Counter (Mie Ayam bowl, Es Kopi cup, Pisang Goreng plate)
+    const ceramicMat = new THREE.MeshLambertMaterial({ color: '#f8f4eb' });
+    const noodleMat = new THREE.MeshLambertMaterial({ color: '#c9933b' });
+    const glassMat = new THREE.MeshLambertMaterial({ color: '#3d2514', transparent: true, opacity: 0.85 });
+
+    // Bowl 1: Mie Ayam Jamur
+    const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.2, 0.22, 12), ceramicMat);
+    bowl.position.set(-1.2, 1.35, -3.2);
+    const noodles = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), noodleMat);
+    noodles.scale.set(1, 0.35, 1);
+    noodles.position.set(-1.2, 1.44, -3.2);
+    this.group.add(bowl);
+    this.group.add(noodles);
+
+    // Glass 2: Es Kopi Susu
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.11, 0.35, 10), glassMat);
+    cup.position.set(0.0, 1.42, -3.2);
+    this.group.add(cup);
+
+    // Plate 3: Pisang Goreng Keju
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.3, 0.08, 12), ceramicMat);
+    plate.position.set(1.2, 1.32, -3.2);
+    const fritter = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.25), new THREE.MeshLambertMaterial({ color: '#d9822b' }));
+    fritter.position.set(1.2, 1.4, -3.2);
+    this.group.add(plate);
+    this.group.add(fritter);
+
+    // 9. Welcoming Entrance Torii Lantern Posts at Landing Approach
+    const entranceLanternMat = new THREE.MeshLambertMaterial({ color: '#ffb703', emissive: 0xaa6600 });
+    [-2.6, 2.6].forEach(px => {
+      const lanternPost = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 2.6, 8), woodMat);
+      lanternPost.position.set(px, 1.3, 4.3);
+      const lanternTop = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.4), entranceLanternMat);
+      lanternTop.position.set(px, 2.5, 4.3);
+      this.group.add(lanternPost);
+      this.group.add(lanternTop);
     });
   }
 }

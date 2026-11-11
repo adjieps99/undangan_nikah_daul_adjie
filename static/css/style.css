@@ -102,7 +102,7 @@ html, body {
   border-color: #000;
 }
 
-/* --- COVER SCREEN STYLES --- */
+/* --- COVER SCREEN STYLES (THE GARDEN OF US) --- */
 .cover-view-container {
   position: relative;
   display: flex;
@@ -110,9 +110,9 @@ html, body {
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 480px;
-  padding: 20px;
-  gap: 20px;
+  max-width: 520px;
+  padding: 24px 20px;
+  gap: 18px;
   z-index: 2;
 }
 
@@ -131,121 +131,283 @@ html, body {
   width: 4px;
   height: 4px;
   background: var(--color-gold-light);
-  box-shadow: 0 0 6px var(--color-gold);
-  animation: sparkleAnim 1.8s infinite ease-in-out;
+  box-shadow: 0 0 8px var(--color-gold);
+  border-radius: 50%;
+  animation: sparkleAnim 2s infinite ease-in-out;
 }
 
 @keyframes sparkleAnim {
-  0%, 100% { opacity: 0.1; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.4); }
+  0%, 100% { opacity: 0.15; transform: scale(0.7); }
+  50% { opacity: 0.95; transform: scale(1.3); }
 }
 
 .cover-header-badge {
   text-align: center;
   z-index: 2;
+  margin-bottom: 6px;
 }
 
-.retro-sub-title {
-  font-size: 10px;
+.garden-brand-title {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 700;
   color: var(--color-gold-light);
+  letter-spacing: 4px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8), 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+.garden-brand-tagline {
+  font-family: var(--font-serif);
+  font-size: 13px;
+  color: #ffbe97;
+  font-style: italic;
+  margin-top: 4px;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.wedding-names-banner {
+  font-size: 11px;
+  font-weight: bold;
+  color: var(--color-gold);
   letter-spacing: 2px;
-  margin-bottom: 6px;
+  margin-top: 8px;
   text-shadow: 2px 2px #000;
 }
 
-.retro-main-title {
-  font-size: 18px;
-  color: var(--color-gold);
-  text-shadow: 3px 3px #000;
-  line-height: 1.3;
-}
-
-.wedding-names {
-  font-family: var(--font-serif);
-  font-size: 22px;
-  color: var(--color-text-light);
-  margin-top: 6px;
-  font-style: italic;
-}
-
-/* Pixel Envelope Animation */
-.pixel-envelope {
+/* --- PHYSICALLY CLOSED ENVELOPE COMPONENT --- */
+.envelope-wrapper {
   position: relative;
   width: 100%;
-  max-width: 340px;
-  height: 220px;
-  background: #c29b38;
-  border: 4px solid #000;
-  box-shadow: 6px 6px 0 #000;
-  cursor: pointer;
-  transition: transform 0.3s ease;
+  max-width: 360px;
+  height: 250px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  z-index: 2;
-  overflow: hidden;
+  z-index: 3;
 }
 
-.pixel-envelope.open .envelope-flap {
-  transform: rotateX(180deg);
+.envelope-interactive {
+  position: relative;
+  width: 100%;
+  height: 210px;
+  cursor: pointer;
+  perspective: 900px;
+  transition: transform 0.3s ease;
+}
+
+.envelope-interactive:hover {
+  transform: translateY(-2px);
+}
+
+/* Back Plate */
+.envelope-back-plate {
+  position: absolute;
+  inset: 0;
+  background: #a17822;
+  border: 3px solid #000;
+  border-radius: 4px;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.6);
   z-index: 1;
 }
 
-.envelope-flap {
+/* Letter Sheet (Starts completely concealed inside pocket at y: 0, slides up on open) */
+.envelope-letter-sheet {
+  position: absolute;
+  top: 14px;
+  left: 5%;
+  width: 90%;
+  height: 190px;
+  background: #fdfcf7;
+  border: 2px solid #2b2210;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  padding: 16px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  z-index: 2;
+  opacity: 0;
+  transform: translateY(0);
+  transition: transform 0.55s cubic-bezier(0.2, 0.8, 0.25, 1), opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.envelope-interactive.open .envelope-letter-sheet {
+  opacity: 1;
+  transform: translateY(-75px);
+  z-index: 10;
+  pointer-events: auto;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7);
+}
+
+.letter-top-ornament {
+  font-size: 8px;
+  color: var(--color-gold);
+  letter-spacing: 3px;
+}
+
+.letter-badge {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: #8b2500;
+  font-weight: bold;
+}
+
+.letter-guest-to {
+  font-size: 9px;
+  color: #777;
+  margin-top: 2px;
+}
+
+.letter-guest-recipient {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: bold;
+  color: #1a1610;
+  margin: 1px 0 4px;
+}
+
+.letter-body-text {
+  font-size: 9.5px;
+  color: #4a3e2e;
+  line-height: 1.45;
+  margin: 0 4px 8px;
+}
+
+.letter-open-cta-btn {
+  background: linear-gradient(135deg, #d4af37 0%, #b89228 100%);
+  color: #121008;
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  font-weight: bold;
+  padding: 8px 16px;
+  border: 2px solid #000;
+  border-radius: 4px;
+  box-shadow: 2px 2px 0 #000;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  width: 90%;
+}
+
+.letter-open-cta-btn:hover {
+  background: #f5e6a3;
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #000;
+}
+
+/* Front Pocket (Physically covers the bottom & sides, hiding the letter 100%) */
+.envelope-front-pocket {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 135px;
+  background: #c89c33;
+  border-top: none;
+  border-left: 3px solid #000;
+  border-right: 3px solid #000;
+  border-bottom: 3px solid #000;
+  border-radius: 0 0 4px 4px;
+  clip-path: polygon(0% 0%, 50% 36%, 100% 0%, 100% 100%, 0% 100%);
+  z-index: 4;
+}
+
+.envelope-pocket-crease-left {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-bottom: 135px solid #b38827;
+  border-right: 175px solid transparent;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.envelope-pocket-crease-right {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-bottom: 135px solid #aa7f20;
+  border-left: 175px solid transparent;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* Top Flap (Flips upward on open) */
+.envelope-top-flap {
   position: absolute;
   top: 0;
   left: 0;
   width: 0;
   height: 0;
-  border-left: 166px solid transparent;
-  border-right: 166px solid transparent;
-  border-top: 110px solid #a8832a;
-  transform-origin: top;
-  transition: transform 0.4s ease;
-  z-index: 4;
+  border-left: 177px solid transparent;
+  border-right: 177px solid transparent;
+  border-top: 112px solid #be932d;
+  transform-origin: top center;
+  transition: transform 0.45s ease, z-index 0.2s;
+  z-index: 6;
 }
 
-.envelope-seal {
+.envelope-interactive.open .envelope-top-flap {
+  transform: rotateX(180deg);
+  z-index: 1;
+}
+
+/* Wax Seal on Flap tip */
+.envelope-wax-seal {
   position: absolute;
-  top: 85px;
-  font-size: 28px;
-  z-index: 5;
-}
-
-.pixel-envelope.open .envelope-seal {
-  opacity: 0;
-}
-
-.envelope-letter {
-  position: absolute;
-  width: 90%;
-  height: 85%;
-  background: #fdfaf0;
-  border: 3px solid #000;
-  color: var(--color-text-dark);
-  padding: 14px;
-  text-align: center;
+  top: 75px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 60px;
+  background: radial-gradient(circle, #b83434 0%, #7d1c1c 100%);
+  border: 2px solid #541111;
+  border-radius: 50%;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.25);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  transition: transform 0.4s ease;
-  z-index: 3;
+  z-index: 7;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
 }
 
-.pixel-envelope.open .envelope-letter {
-  transform: translateY(-10px);
+.envelope-interactive.open .envelope-wax-seal {
+  opacity: 0;
+  transform: translateX(-50%) scale(0.6);
 }
 
-.letter-header {
+.wax-seal-icon {
+  font-size: 18px;
+}
+
+.wax-seal-text {
+  font-size: 5px;
+  font-weight: bold;
+  color: #fff;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+.envelope-instruction-hint {
   font-size: 10px;
-  color: var(--color-maroon);
+  color: var(--color-gold-light);
+  opacity: 0.85;
+  letter-spacing: 1px;
+  text-shadow: 1px 1px #000;
+  transition: opacity 0.3s;
 }
 
-.letter-guest-label {
-  font-size: 8px;
-  color: #666;
+.envelope-interactive.open ~ .envelope-instruction-hint {
+  opacity: 0;
 }
 
 .letter-guest-name {
@@ -881,4 +1043,68 @@ svg {
   from { transform: translate(-50%, -15px); opacity: 0; }
   to { transform: translate(-50%, 0); opacity: 1; }
 }
+
+/* In-Game Navigation Compass / Radar Bar */
+.hud-radar-strip {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px;
+  background: rgba(18, 14, 22, 0.88);
+  border: 1px solid rgba(212, 175, 55, 0.65);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6), inset 0 0 8px rgba(212, 175, 55, 0.15);
+  border-radius: 20px;
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: 11px;
+  color: #f5e6a3;
+  z-index: 25;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  animation: radarFadeIn 0.35s ease;
+}
+
+.hud-radar-strip .radar-pulse {
+  display: inline-block;
+  font-size: 13px;
+  animation: radarPulse 1.8s infinite ease-in-out;
+}
+
+.hud-radar-strip strong {
+  color: #fff;
+}
+
+@keyframes radarPulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.22); opacity: 1; }
+}
+
+@keyframes radarFadeIn {
+  from { opacity: 0; transform: translate(-50%, -8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+.hud-audio-btn {
+  transition: transform 0.15s ease, background-color 0.2s ease;
+}
+
+.hud-audio-btn:active {
+  transform: scale(0.92);
+}
+
+@media (max-width: 640px) {
+  .hud-radar-strip {
+    top: 52px;
+    font-size: 10px;
+    padding: 4px 10px;
+    max-width: 90vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
 

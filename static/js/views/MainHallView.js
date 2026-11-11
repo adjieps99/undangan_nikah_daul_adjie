@@ -4,6 +4,8 @@ import { createRetroButton } from '../ui/RetroButton.js';
 import { TextureFactory } from '../three/TextureFactory.js';
 import { CharacterController } from '../three/CharacterController.js';
 import { Controls } from '../game/Controls.js';
+import { audioSystem } from '../game/AudioSystem.js';
+import { Avatar3D } from '../characters/Avatar3D.js';
 
 export class MainHallView {
   constructor() {
@@ -81,12 +83,23 @@ export class MainHallView {
           <div style="font-size: 13px; font-weight: bold; color: #fff;">GRAND WEDDING RECEPTION HALL</div>
         </div>
       </div>
-      <div style="display: flex; gap: 8px; pointer-events: auto;">
+      <div style="display: flex; gap: 8px; align-items: center; pointer-events: auto;">
+        <button id="hall-audio-btn" class="retro-btn retro-btn-secondary" title="Musik & Suara" style="font-size: 13px; padding: 6px 10px; min-width: 36px;">
+          ${audioSystem.isMuted ? '🔇' : '🔊'}
+        </button>
         <button id="hall-quick-exit-btn" class="retro-btn retro-btn-secondary" style="font-size: 11px; padding: 6px 12px;">
           🌿 KELUAR KE KEBUN
         </button>
       </div>
     `;
+
+    const audioBtn = overlay.querySelector('#hall-audio-btn');
+    if (audioBtn) {
+      audioBtn.addEventListener('click', () => {
+        const isMuted = audioSystem.toggleMute();
+        audioBtn.textContent = isMuted ? '🔇' : '🔊';
+      });
+    }
 
     overlay.querySelector('#hall-quick-exit-btn').addEventListener('click', () => {
       this.exitToGarden();
@@ -184,6 +197,7 @@ export class MainHallView {
     let lastX = 0;
     let lastY = 0;
 
+    // Desktop Mouse Drag Orbit
     mountEl.addEventListener('mousedown', (e) => {
       if (e.button === 0 && e.clientX > window.innerWidth * 0.25) {
         isMouseDown = true;
@@ -208,12 +222,33 @@ export class MainHallView {
       isMouseDown = false;
     });
 
-    // Touch swipe orbit
+    // Desktop Mouse Wheel Zoom (Min: 2.8m, Max: 12.0m)
+    mountEl.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const zoomSpeed = 0.0035;
+      this.cameraRadius += e.deltaY * zoomSpeed;
+      this.cameraRadius = Math.max(2.8, Math.min(12.0, this.cameraRadius));
+    }, { passive: false });
+
+    // Touch Swipe Orbit & Touch Pinch Zoom (Mobile)
     let touchLookId = null;
     let lastTouchX = 0;
     let lastTouchY = 0;
+    let initialPinchDist = null;
+    let initialPinchRadius = 5.6;
 
     mountEl.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        // Two fingers detected: pinch zoom gesture
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        initialPinchRadius = this.cameraRadius;
+        touchLookId = null;
+        return;
+      }
+
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
         if (touch.clientX > window.innerWidth * 0.35 && touchLookId === null) {
@@ -226,6 +261,16 @@ export class MainHallView {
     }, { passive: true });
 
     window.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && initialPinchDist) {
+        const currentPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const scale = initialPinchDist / Math.max(10, currentPinchDist);
+        this.cameraRadius = Math.max(2.8, Math.min(12.0, initialPinchRadius * scale));
+        return;
+      }
+
       if (touchLookId === null) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
@@ -244,6 +289,9 @@ export class MainHallView {
     }, { passive: true });
 
     const handleTouchEnd = (e) => {
+      if (e.touches.length < 2) {
+        initialPinchDist = null;
+      }
       for (let i = 0; i < e.changedTouches.length; i++) {
         if (e.changedTouches[i].identifier === touchLookId) {
           touchLookId = null;
@@ -271,6 +319,7 @@ export class MainHallView {
     this.currentSeat = seat;
 
     this.character.sitOn(seat, seat.faceAngle);
+    audioSystem.playChime(440);
 
     if (this.sitButton) {
       this.sitButton.innerText = '🚶 BERDIRI KEMBALI';
@@ -293,6 +342,7 @@ export class MainHallView {
   standUp() {
     if (!this.character) return;
     this.isSitting = false;
+    audioSystem.playChime(523.25);
 
     // Step slightly to the side/rear of the seat
     const seat = this.currentSeat;
@@ -553,14 +603,14 @@ export class MainHallView {
     if (this.isSitting) {
       if (this.sitButton) this.sitButton.innerText = '🚶 BERDIRI KEMBALI';
     } else if (this.nearbySeat) {
-      if (this.sitButton) this.sitButton.innerText = `🪑 DUDUK DI ${this.nearbySeat.label.toUpperCase()}`;
+      if (this.sitButton) this.sitButton.innerText = `🪑 DUDUK DI KURSI ${this.nearbySeat.id}`;
       if (this.promptEl) {
-        const vipTag = this.nearbySeat.isReservedForPlayer ? ' ⭐ VIP' : '';
+        const vipTag = this.nearbySeat.isReservedForPlayer ? ' <span style="color:#ffd700;">★ VIP</span>' : '';
         this.promptEl.innerHTML = `
-          <div class="prompt-icon">🪑</div>
-          <div class="prompt-text">
-            <strong>${this.nearbySeat.label}${vipTag}</strong>
-            <span>Tap / Tekan [E] untuk Duduk di Kursi</span>
+          <div class="prompt-icon" style="font-size: 16px;">🪑</div>
+          <div class="prompt-text" style="font-size: 11px; line-height: 1.3;">
+            <div style="font-weight: bold; color: #fff;">Kursi ${this.nearbySeat.id} (${this.nearbySeat.label})${vipTag}</div>
+            <div style="font-size: 10px; color: #ffbe97;">Tap atau Tekan [E] untuk Duduk</div>
           </div>
         `;
         this.promptEl.classList.remove('hidden');
@@ -817,91 +867,33 @@ export class MainHallView {
       this.hallGroup.add(bouquet);
     });
 
-    // 6. ADJIE & DAUL 3D MODELS SEATED ON PELAMINAN
-    const buildCoupleAvatar = (isGroom, xPos) => {
-      const charGroup = new THREE.Group();
-      charGroup.position.set(xPos, 0.53, -14.15);
+    // 6. REALISTIC 3D ADJIE & DAUL SEATED ON PELAMINAN
+    // Groom (Adjie): Tailored Royal Beskap, Traditional Peci Cap, Golden Brooch
+    const groomAvatar = new Avatar3D({
+      skinColor: '#f1c27d',
+      hairColor: '#1a1820',
+      hairStyle: 'cap',
+      outfit: 'traditional_gold',
+      accessory: 'none'
+    });
+    groomAvatar.shadow.visible = false;
+    groomAvatar.setSitting(true);
+    // Sofa cushion is at y = 0.74, stage at 0.34. Placing mesh at y = 0.28 aligns thighs perfectly on cushion
+    groomAvatar.group.position.set(0.62, 0.28, -14.15);
+    this.hallGroup.add(groomAvatar.group);
 
-      const skinMat = new THREE.MeshLambertMaterial({ color: '#f5c699' });
-      const hairMat = new THREE.MeshLambertMaterial({ color: '#1a1820' });
-      const outfitMat = isGroom
-        ? new THREE.MeshLambertMaterial({ color: '#16233b' })
-        : new THREE.MeshLambertMaterial({ color: '#fcfaf2' });
-      const accentMat = new THREE.MeshLambertMaterial({ color: '#d4af37' });
-
-      // Torso
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.68, 0.30), outfitMat);
-      torso.position.set(0, 0.38, 0);
-      charGroup.add(torso);
-
-      // Gold sash
-      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.10, 0.32), accentMat);
-      sash.position.set(0, 0.28, 0);
-      charGroup.add(sash);
-
-      // Thighs
-      const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.44), outfitMat);
-      thighL.position.set(-0.14, 0.08, 0.22);
-      charGroup.add(thighL);
-
-      const thighR = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.16, 0.44), outfitMat);
-      thighR.position.set(0.14, 0.08, 0.22);
-      charGroup.add(thighR);
-
-      // Calves
-      const calfMat = isGroom ? outfitMat : new THREE.MeshLambertMaterial({ color: '#e8dec8' });
-      const calfL = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.42, 8), calfMat);
-      calfL.position.set(-0.14, -0.16, 0.40);
-      charGroup.add(calfL);
-
-      const calfR = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.065, 0.42, 8), calfMat);
-      calfR.position.set(0.14, -0.16, 0.40);
-      charGroup.add(calfR);
-
-      // Shoes
-      const shoeMat = new THREE.MeshLambertMaterial({ color: isGroom ? '#0f0f14' : '#e6d8b8' });
-      const shoeL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.24), shoeMat);
-      shoeL.position.set(-0.14, -0.34, 0.46);
-      charGroup.add(shoeL);
-
-      const shoeR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.09, 0.24), shoeMat);
-      shoeR.position.set(0.14, -0.34, 0.46);
-      charGroup.add(shoeR);
-
-      // Arms & Hands
-      const armL = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.46, 8), outfitMat);
-      armL.position.set(-0.28, 0.32, 0.12);
-      armL.rotation.x = -0.55;
-      armL.rotation.z = -0.15;
-      charGroup.add(armL);
-
-      const armR = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.46, 8), outfitMat);
-      armR.position.set(0.28, 0.32, 0.12);
-      armR.rotation.x = -0.55;
-      armR.rotation.z = 0.15;
-      charGroup.add(armR);
-
-      // Head
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 12), skinMat);
-      head.position.set(0, 0.95, 0);
-      charGroup.add(head);
-
-      if (isGroom) {
-        const peci = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.23, 0.16, 12), new THREE.MeshLambertMaterial({ color: '#15131b' }));
-        peci.position.set(0, 1.14, 0);
-        charGroup.add(peci);
-      } else {
-        const tiara = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.025, 6, 12, Math.PI), accentMat);
-        tiara.rotation.x = -0.3;
-        tiara.position.set(0, 1.12, 0.10);
-        charGroup.add(tiara);
-      }
-
-      return charGroup;
-    };
-
-    this.hallGroup.add(buildCoupleAvatar(true, 0.62));
-    this.hallGroup.add(buildCoupleAvatar(false, -0.62));
+    // Bride (Daul): Royal Bridal Gown / Kebaya with Gold Suntiang Crown & Jasmine Ear Bloom
+    const brideAvatar = new Avatar3D({
+      skinColor: '#ffdbac',
+      hairColor: '#1a1820',
+      hairStyle: 'bun',
+      outfit: 'dress',
+      accessory: 'crown'
+    });
+    brideAvatar.shadow.visible = false;
+    brideAvatar.setSitting(true);
+    brideAvatar.group.position.set(-0.62, 0.28, -14.15);
+    this.hallGroup.add(brideAvatar.group);
   }
 
   buildSeatedWeddingGuests() {
@@ -913,52 +905,15 @@ export class MainHallView {
     const flowerPinkMat = new THREE.MeshLambertMaterial({ color: '#f28b9b' });
     const vipMat = new THREE.MeshLambertMaterial({ color: '#ffd700', emissive: 0x443300 });
 
-    const buildGuestModel = (outfitColor, hairColor, skinColor = '#f5c699') => {
-      const guestGroup = new THREE.Group();
-      const skinMat = new THREE.MeshLambertMaterial({ color: skinColor });
-      const outfitMat = new THREE.MeshLambertMaterial({ color: outfitColor });
-      const hairMat = new THREE.MeshLambertMaterial({ color: hairColor });
-
-      const torso = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.62, 0.26), outfitMat);
-      torso.position.set(0, 0.36, 0);
-      guestGroup.add(torso);
-
-      const thighL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.40), outfitMat);
-      thighL.position.set(-0.13, 0.08, 0.20);
-      guestGroup.add(thighL);
-
-      const thighR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.40), outfitMat);
-      thighR.position.set(0.13, 0.08, 0.20);
-      guestGroup.add(thighR);
-
-      const calfL = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.055, 0.42, 8), outfitMat);
-      calfL.position.set(-0.13, -0.16, 0.38);
-      guestGroup.add(calfL);
-
-      const calfR = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.055, 0.42, 8), outfitMat);
-      calfR.position.set(0.13, -0.16, 0.38);
-      guestGroup.add(calfR);
-
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.20, 10, 10), skinMat);
-      head.position.set(0, 0.88, 0);
-      guestGroup.add(head);
-
-      const hair = new THREE.Mesh(new THREE.SphereGeometry(0.21, 10, 10), hairMat);
-      hair.position.set(0, 0.94, -0.02);
-      guestGroup.add(hair);
-
-      return guestGroup;
-    };
-
     const guestStyles = [
-      { outfit: '#5c381e', hair: '#141416' },
-      { outfit: '#3e6b52', hair: '#2a1a10' },
-      { outfit: '#7a2232', hair: '#1a1820' },
-      { outfit: '#24395e', hair: '#222228' },
-      { outfit: '#a8893e', hair: '#181210' },
-      { outfit: '#503554', hair: '#1a1820' },
-      { outfit: '#324a48', hair: '#281c14' },
-      { outfit: '#6b3022', hair: '#141416' }
+      { outfit: 'traditional_gold', hair: '#141416', hairStyle: 'short', skin: '#f1c27d', accessory: 'none' },
+      { outfit: 'traditional_maroon', hair: '#2a1a10', hairStyle: 'hijab', skin: '#ffdbac', accessory: 'none' },
+      { outfit: 'tuxedo', hair: '#1a1820', hairStyle: 'short', skin: '#e0ac69', accessory: 'glasses' },
+      { outfit: 'dress', hair: '#222228', hairStyle: 'wavy', skin: '#f1c27d', accessory: 'flower' },
+      { outfit: 'traditional_gold', hair: '#181210', hairStyle: 'cap', skin: '#8d5524', accessory: 'none' },
+      { outfit: 'traditional_maroon', hair: '#1a1820', hairStyle: 'bun', skin: '#ffdbac', accessory: 'flower' },
+      { outfit: 'tuxedo', hair: '#281c14', hairStyle: 'short', skin: '#e0ac69', accessory: 'none' },
+      { outfit: 'dress', hair: '#141416', hairStyle: 'hijab', skin: '#f1c27d', accessory: 'none' }
     ];
 
     const tables = [
@@ -1067,14 +1022,23 @@ export class MainHallView {
 
         this.hallGroup.add(chairGroup);
 
-        // Populate NPC Guest if occupied
+        // Populate Realistic NPC Guest if occupied
         if (isOccupiedByNPC) {
           const style = guestStyles[guestIdx % guestStyles.length];
           guestIdx++;
-          const guest = buildGuestModel(style.outfit, style.hair);
-          guest.position.set(cx, 0.44, cz);
-          guest.rotation.y = faceTableAngle;
-          this.hallGroup.add(guest);
+          const guestAvatar = new Avatar3D({
+            skinColor: style.skin,
+            hairColor: style.hair,
+            hairStyle: style.hairStyle,
+            outfit: style.outfit,
+            accessory: style.accessory
+          });
+          guestAvatar.shadow.visible = false;
+          guestAvatar.setSitting(true);
+          // Chair cushion is at y = 0.44. Align thighs on cushion: 0.44 - 0.46 = -0.02
+          guestAvatar.group.position.set(cx, -0.02, cz);
+          guestAvatar.group.rotation.y = faceTableAngle;
+          this.hallGroup.add(guestAvatar.group);
         }
       }
     });

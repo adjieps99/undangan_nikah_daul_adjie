@@ -66,9 +66,9 @@ class App {
               this.mapView = new MapView3D();
             }
             this.uiLayer.appendChild(this.mapView.render());
-            // Show opening video modal over 3D world
-            import('./views/modals/OpeningVideoModal.js').then(({ createOpeningVideoModal }) => {
-              const modal = createOpeningVideoModal();
+            // Show storytelling voice recording modal over 3D world
+            import('./views/modals/VoiceRecordingModal.js').then(({ createVoiceRecordingModal }) => {
+              const modal = createVoiceRecordingModal();
               if (modal) this.uiLayer.appendChild(modal);
             });
           });

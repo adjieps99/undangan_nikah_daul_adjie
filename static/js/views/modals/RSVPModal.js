@@ -1,6 +1,6 @@
 import { createModal } from '../../ui/Modal.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
-import { gameState, MODALS, PHASES } from '../../state/GameState.js';
+import { gameState, PHASES } from '../../state/GameState.js';
 
 export function createRSVPModal() {
   const state = gameState.getState();
@@ -8,15 +8,18 @@ export function createRSVPModal() {
   const content = document.createElement('div');
   content.className = 'rsvp-modal-content';
 
+  const category = state.guestCategory || 'A';
+  const isCategoryB = category === 'B';
+
   const choiceParam = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('choice') : null;
   let attending = choiceParam === 'declined' ? false : (currentRSVP.attending !== false);
-  let guestCount = currentRSVP.guestCount || 1;
+  let guestCount = isCategoryB ? 1 : (currentRSVP.guestCount || 1);
 
   content.innerHTML = `
     <!-- 1. Guest Name Welcome Banner -->
     <div class="rsvp-field-group" style="margin-bottom: 16px; text-align: center;">
-      <span style="font-size: 11px; letter-spacing: 1.5px; color: var(--color-gold); font-weight: bold;">
-        UNDANGAN PERNIKAHAN ADJIE & DAUL
+      <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
+        KONFIRMASI KEHADIRAN (RSVP)
       </span>
       <div id="rsvp-guest-name-display" style="
         font-family: var(--font-serif);
@@ -24,24 +27,40 @@ export function createRSVPModal() {
         font-weight: bold;
         color: #ffffff;
         margin-top: 4px;
-      "></div>
-      <p style="font-size: 12px; color: #ffbe97; margin: 4px 0 0;">
-        Mohon konfirmasikan kehadiran Anda pada resepsi di Restoran The Hachi Garden.
+      ">${state.guestName || 'Tamu Undangan'}</div>
+      
+      <!-- Invitation Category Badge -->
+      <div style="
+        display: inline-block;
+        margin-top: 6px;
+        padding: 4px 12px;
+        background: ${isCategoryB ? 'rgba(255, 180, 100, 0.15)' : 'rgba(212, 175, 55, 0.18)'};
+        border: 1px solid ${isCategoryB ? '#ffb464' : 'var(--color-gold)'};
+        border-radius: 20px;
+        font-size: 10.5px;
+        font-weight: bold;
+        color: ${isCategoryB ? '#ffd29d' : 'var(--color-gold-light)'};
+      ">
+        ${isCategoryB ? '🔖 Berlaku untuk 1 orang' : '🔖 Berlaku untuk maksimal 2 orang'}
+      </div>
+
+      <p style="font-size: 11px; color: #ffbe97; margin: 8px 0 0; line-height: 1.4;">
+        Merupakan suatu kehormatan dan kebahagiaan bagi kami apabila Bapak/Ibu/Sahabat dapat hadir memberikan doa restu.
       </p>
     </div>
 
     <!-- 2. Attendance Status: HADIR / TIDAK HADIR -->
-    <div class="rsvp-field-group" style="margin-bottom: 20px;">
-      <label style="display: block; font-size: 13px; font-weight: bold; color: #f5eedc; margin-bottom: 8px;">
-        Konfirmasi Kehadiran:
+    <div class="rsvp-field-group" style="margin-bottom: 16px;">
+      <label style="display: block; font-size: 12px; font-weight: bold; color: #f5eedc; margin-bottom: 8px; text-align: center;">
+        Apakah Anda berkenan hadir?
       </label>
       <div class="rsvp-toggle-row" style="display: flex; gap: 10px;">
         <button type="button" class="rsvp-btn ${attending ? 'active' : ''}" id="rsvp-yes" style="
           flex: 1;
-          padding: 14px 10px;
+          padding: 12px 10px;
           border-radius: 8px;
           font-weight: bold;
-          font-size: 13px;
+          font-size: 12px;
           cursor: pointer;
           transition: all 0.2s ease;
         ">
@@ -49,14 +68,14 @@ export function createRSVPModal() {
         </button>
         <button type="button" class="rsvp-btn ${!attending ? 'active' : ''}" id="rsvp-no" style="
           flex: 1;
-          padding: 14px 10px;
+          padding: 12px 10px;
           border-radius: 8px;
           font-weight: bold;
-          font-size: 13px;
+          font-size: 12px;
           cursor: pointer;
           transition: all 0.2s ease;
         ">
-          😔 TIDAK HADIR
+          🕊️ BELUM BISA HADIR
         </button>
       </div>
     </div>
@@ -68,53 +87,64 @@ export function createRSVPModal() {
       border: 1px solid rgba(212, 175, 55, 0.35);
       border-radius: 8px;
       padding: 14px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     ">
-      <div class="rsvp-field-group" style="margin-bottom: 8px;">
-        <label style="display: block; font-size: 12px; color: #ffe4a0; margin-bottom: 6px;">
-          Jumlah Tamu yang Hadir:
+      <div class="rsvp-field-group" style="margin-bottom: 6px;">
+        <label style="display: block; font-size: 11px; color: #ffe4a0; margin-bottom: 6px; font-weight: bold;">
+          Jumlah Kehadiran:
         </label>
-        <select id="rsvp-count-select" class="retro-select" style="
-          width: 100%;
-          padding: 8px 12px;
-          border-radius: 6px;
-          background: #251d28;
-          color: #fff;
-          border: 1px solid var(--color-gold);
-          font-size: 13px;
-        ">
-          <option value="1" ${guestCount === 1 ? 'selected' : ''}>1 Orang</option>
-          <option value="2" ${guestCount === 2 ? 'selected' : ''}>2 Orang</option>
-        </select>
+        ${isCategoryB ? `
+          <div style="
+            padding: 9px 12px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(212, 175, 55, 0.4);
+            border-radius: 6px;
+            font-size: 12px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          ">
+            <span>👤 1 Orang</span>
+            <span style="font-size: 10px; color: #ffbe97; font-style: italic;">Berlaku untuk 1 orang</span>
+          </div>
+        ` : `
+          <select id="rsvp-count-select" class="retro-select" style="
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: #251d28;
+            color: #fff;
+            border: 1px solid var(--color-gold);
+            font-size: 12px;
+          ">
+            <option value="1" ${guestCount === 1 ? 'selected' : ''}>👤 1 Orang</option>
+            <option value="2" ${guestCount === 2 ? 'selected' : ''}>👥 2 Orang</option>
+          </select>
+        `}
       </div>
-      <p style="font-size: 11px; color: #e0d0c0; margin: 6px 0 0; line-height: 1.4;">
-        ✨ Meja dan jamuan resepsi Anda di Main Reception Hall The Hachi akan dipersiapkan dengan penuh sukacita.
+      <p style="font-size: 10.5px; color: #e0d0c0; margin: 8px 0 0; line-height: 1.45;">
+        ✨ Meja dan jamuan resepsi Anda di The Hachi Garden akan kami persiapkan dengan penuh sukacita.
       </p>
     </div>
 
     <!-- Notice Box for TIDAK HADIR -->
     <div id="rsvp-details-no" style="
       display: ${!attending ? 'block' : 'none'};
-      background: rgba(255, 120, 120, 0.08);
-      border: 1px solid rgba(255, 120, 120, 0.35);
+      background: rgba(255, 140, 140, 0.08);
+      border: 1px solid rgba(255, 140, 140, 0.35);
       border-radius: 8px;
       padding: 14px;
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     ">
-      <p style="font-size: 12px; color: #ffbebe; margin: 0; line-height: 1.4;">
-        🕊️ Terima kasih atas doa restunya dari kejauhan. Kehangatan doa Anda tetap menyertai kebahagiaan Adjie & Daul.
+      <p style="font-size: 11.5px; color: #ffbebe; margin: 0; line-height: 1.45;">
+        🕊️ Terima kasih atas doa restunya dari kejauhan. Kehangatan doa Anda tetap menyertai langkah baru kami.
       </p>
     </div>
 
-    <!-- Result Confirmation Box (hidden by default) -->
-    <div id="rsvp-result-box" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 14px; text-align: center;"></div>
+    <!-- Result Confirmation Feedback Box -->
+    <div id="rsvp-result-box" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 14px; text-align: center; font-size: 11.5px; line-height: 1.4;"></div>
   `;
-
-  // UI Elements
-  const guestNameDisplay = content.querySelector('#rsvp-guest-name-display');
-  if (guestNameDisplay) {
-    guestNameDisplay.textContent = state.guestName || 'Tamu Undangan';
-  }
 
   const btnYes = content.querySelector('#rsvp-yes');
   const btnNo = content.querySelector('#rsvp-no');
@@ -143,7 +173,10 @@ export function createRSVPModal() {
   const submitBtn = createRetroButton({
     text: '💾 SIMPAN KONFIRMASI RSVP',
     onClick: async () => {
-      const finalCount = attending ? parseInt(countSelect ? countSelect.value : '1') : 0;
+      let finalCount = 0;
+      if (attending) {
+        finalCount = isCategoryB ? 1 : parseInt(countSelect ? countSelect.value : '1', 10);
+      }
 
       submitBtn.disabled = true;
       submitBtn.innerText = '⏳ MENYIMPAN KONFIRMASI...';
@@ -151,7 +184,8 @@ export function createRSVPModal() {
       const payload = {
         guest_name: state.guestName,
         attending: attending ? 1 : 0,
-        guest_count: finalCount
+        guest_count: finalCount,
+        group_category: category
       };
 
       try {
@@ -194,6 +228,7 @@ export function createRSVPModal() {
           rsvp_id: activeRsvpId,
           rsvp_token: activeRsvpToken,
           guestName: state.guestName,
+          category,
           attending,
           guestCount: finalCount,
           submittedAt: new Date().toISOString()
@@ -204,7 +239,7 @@ export function createRSVPModal() {
           resultBox.style.background = 'rgba(50, 180, 80, 0.2)';
           resultBox.style.border = '1px solid #44ff66';
           resultBox.style.color = '#aaffaa';
-          resultBox.innerHTML = '🎉 <strong>Konfirmasi Berhasil!</strong><br>Selamat datang di pernikahan Adjie & Daul. Membawa Anda masuk ke Main Reception Hall...';
+          resultBox.innerHTML = '🎉 <strong>Konfirmasi Berhasil!</strong><br>Terima kasih banyak. Membawa Anda masuk ke Main Reception Hall...';
 
           setTimeout(() => {
             gameState.setState({
@@ -218,7 +253,7 @@ export function createRSVPModal() {
           resultBox.style.background = 'rgba(212, 175, 55, 0.2)';
           resultBox.style.border = '1px solid var(--color-gold)';
           resultBox.style.color = '#ffe4a0';
-          resultBox.innerHTML = '🕊️ <strong>Terima Kasih Banyak!</strong><br>Doa dan restu Anda telah tercatat dengan hangat.';
+          resultBox.innerHTML = '🕊️ <strong>Terima Kasih Banyak!</strong><br>Doa dan restu Anda telah tersimpan dengan hangat.';
 
           submitBtn.innerText = '🌿 KEMBALI JELAJAHI KEBUN';
           submitBtn.disabled = false;
@@ -238,7 +273,7 @@ export function createRSVPModal() {
     }
   });
 
-  submitBtn.style.marginTop = '14px';
+  submitBtn.style.marginTop = '10px';
   submitBtn.style.width = '100%';
   content.appendChild(submitBtn);
 
@@ -248,4 +283,3 @@ export function createRSVPModal() {
     content: content
   });
 }
-

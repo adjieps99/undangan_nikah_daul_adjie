@@ -182,17 +182,33 @@ export function createListeningStationModal() {
     });
 
     rowsContainer.appendChild(row);
-    rowEls.push(row);
+    rowEls.push({ row, badge, track });
   });
 
   const renderMusicState = (ms) => {
     const track = ms.track || playlist[ms.currentTrackIndex] || { title: '', artist: '' };
     const filename = ms.missingFilename || getTrackFilename(track);
+    const availabilityMap = ms.trackAvailability || {};
 
     titleEl.textContent = track.title;
     artistEl.textContent = track.artist;
 
-    rowEls.forEach((r, i) => {
+    rowEls.forEach(({ row: r, badge, track: t }, i) => {
+      const tFname = getTrackFilename(t);
+      const isAvail = tFname in availabilityMap ? Boolean(availabilityMap[tFname]) : null;
+      if (isAvail === true) {
+        badge.textContent = i === ms.currentTrackIndex && ms.isPlaying ? '♪ Diputar' : (t.isDefault ? 'Utama • Siap' : 'Siap Putar');
+        badge.style.color = '#1ed760';
+        badge.style.opacity = '1';
+      } else if (isAvail === false) {
+        badge.textContent = t.isDefault ? 'Utama • Belum ada' : 'Belum diunggah';
+        badge.style.color = '#aaa';
+        badge.style.opacity = '0.75';
+      } else {
+        badge.textContent = t.isDefault ? 'Utama' : '';
+        badge.style.color = '#1ed760';
+      }
+
       if (i === ms.currentTrackIndex) {
         r.style.border = '1px solid #1ed760';
         r.style.background = 'rgba(30, 215, 96, 0.15)';
@@ -260,12 +276,12 @@ export function createListeningStationModal() {
 
   prevBtn.addEventListener('click', () => {
     const ms = audioSystem.getMusicState();
-    audioSystem.prevTrack({ autoPlay: ms.isPlaying });
+    audioSystem.prevTrack({ autoPlay: ms.isPlaying || ms.availability !== 'available' });
   });
 
   nextBtn.addEventListener('click', () => {
     const ms = audioSystem.getMusicState();
-    audioSystem.nextTrack({ autoPlay: ms.isPlaying });
+    audioSystem.nextTrack({ autoPlay: ms.isPlaying || ms.availability !== 'available' });
   });
 
   muteBtn.addEventListener('click', () => {

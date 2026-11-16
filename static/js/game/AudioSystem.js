@@ -39,6 +39,7 @@ class AudioSystem {
     this.bgmAudio = null;
     this._bgmProbeToken = 0;
     this._hasAttemptedOpeningBgm = false;
+    this._awaitingGestureResume = false;
     this._userPausedMusic = false;
     this._musicListeners = new Set();
 
@@ -49,6 +50,7 @@ class AudioSystem {
       isPlaying: false,
       availability: 'unknown', // 'unknown' | 'checking' | 'available' | 'missing'
       missingFilename: '',
+      trackAvailability: {},
       currentTime: 0,
       duration: 0,
       volume: 0.78,
@@ -63,17 +65,31 @@ class AudioSystem {
 
       this._initSharedBgmElement();
 
-      // Auto-unlock Web Audio on first user gesture
+      // Auto-unlock Web Audio on first user gesture (and retry paused BGM if browser blocked async play)
       const unlockAudio = () => {
         this.init();
+        if (this._awaitingGestureResume && this.bgmAudio && this.bgmAudio.paused && !this._userPausedMusic) {
+          this._awaitingGestureResume = false;
+          this.bgmAudio.play().catch(() => {});
+        }
         window.removeEventListener('click', unlockAudio);
         window.removeEventListener('touchstart', unlockAudio);
         window.removeEventListener('keydown', unlockAudio);
       };
 
+      const resumeBlockedBgm = () => {
+        if (this._awaitingGestureResume && this.bgmAudio && this.bgmAudio.paused && !this._userPausedMusic) {
+          this._awaitingGestureResume = false;
+          this.bgmAudio.play().catch(() => {
+            this._awaitingGestureResume = true;
+          });
+        }
+      };
+
       window.addEventListener('click', unlockAudio);
       window.addEventListener('touchstart', unlockAudio);
       window.addEventListener('keydown', unlockAudio);
+      window.addEventListener('pointerdown', resumeBlockedBgm);
 
       // Global game event listeners
       window.addEventListener('player-step', () => this.playFootstep());
@@ -108,6 +124,7 @@ class AudioSystem {
     });
 
     audio.addEventListener('play', () => {
+      this._awaitingGestureResume = false;
       this.musicState.isPlaying = true;
       this.musicState.availability = 'available';
       this._emitMusicUpdate();
@@ -127,6 +144,12 @@ class AudioSystem {
       const missingName = getTrackFilename(track);
       if (track && track.audioUrl) {
         this.availabilityCache.set(track.audioUrl, false);
+      }
+      if (missingName) {
+        this.musicState.trackAvailability = {
+          ...this.musicState.trackAvailability,
+          [missingName]: false
+        };
       }
       this.musicState.isPlaying = false;
       this.musicState.availability = 'missing';
@@ -163,22 +186,51 @@ class AudioSystem {
     };
   }
 
-  async _probeTrackUrl(url, filename = '') {
+  async refreshTrackAvailability({ force = false } = {}) {
+    if (typeof fetch !== 'function') return this.musicState.trackAvailability;
+    try {
+      const status = await fetchAssetStatus(force);
+      const tracksMap = status && status.audio && status.audio.tracks ? status.audio.tracks : null;
+      if (tracksMap) {
+        this.musicState.trackAvailability = { ...tracksMap };
+        for (const t of this.playlist) {
+          const fname = getTrackFilename(t);
+          if (t.audioUrl && fname in tracksMap) {
+            this.availabilityCache.set(t.audioUrl, Boolean(tracksMap[fname]));
+          }
+        }
+        this._emitMusicUpdate();
+      }
+    } catch {}
+    return this.musicState.trackAvailability;
+  }
+
+  async _probeTrackUrl(url, filename = '', forceRefresh = false) {
     if (!url || typeof fetch !== 'function') return false;
-    if (this.availabilityCache.has(url)) {
-      return this.availabilityCache.get(url);
+    if (!forceRefresh && this.availabilityCache.get(url) === true) {
+      return true;
     }
     try {
-      const status = await fetchAssetStatus();
+      const status = await fetchAssetStatus(forceRefresh);
       const fname = filename || String(url).split('/').pop() || '';
       if (status && status.audio && status.audio.tracks && fname in status.audio.tracks) {
         const ok = Boolean(status.audio.tracks[fname]);
         this.availabilityCache.set(url, ok);
+        this.musicState.trackAvailability = {
+          ...this.musicState.trackAvailability,
+          [fname]: ok
+        };
         return ok;
       }
-      const resp = await fetch(url, { method: 'HEAD' });
+      const resp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
       const ok = Boolean(resp && resp.ok);
       this.availabilityCache.set(url, ok);
+      if (fname) {
+        this.musicState.trackAvailability = {
+          ...this.musicState.trackAvailability,
+          [fname]: ok
+        };
+      }
       return ok;
     } catch {
       this.availabilityCache.set(url, false);
@@ -186,28 +238,81 @@ class AudioSystem {
     }
   }
 
+  _findPreferredAvailableTrackIndex() {
+    const map = this.musicState.trackAvailability || {};
+    const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
+    const defaultTrack = this.playlist[defaultIdx];
+    if (defaultTrack && map[getTrackFilename(defaultTrack)]) {
+      return defaultIdx;
+    }
+    const firstAvailable = this.playlist.findIndex((t) => Boolean(map[getTrackFilename(t)]));
+    return firstAvailable >= 0 ? firstAvailable : defaultIdx;
+  }
+
   /**
    * Called strictly inside a valid user interaction gesture (Cover envelope open / enter CTA).
-   * Starts default track 0 (Langit Merah Muda — Afgan) seamlessly once without overriding user pause.
+   * Prefers track 0 (Langit Merah Muda — Afgan), or falls back seamlessly to the first
+   * uploaded track (e.g. 02_rona_merah_langit.mp3) if track 0 hasn't been uploaded yet.
    */
   async ensureOpeningTrackPlaying() {
     this.init();
-    if (this._hasAttemptedOpeningBgm || this._userPausedMusic) return;
+    if (this._userPausedMusic) return;
     if (this.musicState.isPlaying) {
       this._hasAttemptedOpeningBgm = true;
       return;
     }
+    if (this._awaitingGestureResume && this.bgmAudio && this.bgmAudio.getAttribute('src')) {
+      try {
+        await this.bgmAudio.play();
+        this._awaitingGestureResume = false;
+        this._hasAttemptedOpeningBgm = true;
+        return;
+      } catch {}
+    }
+
+    await this.refreshTrackAvailability({ force: !this._hasAttemptedOpeningBgm });
+    const targetIdx = this._findPreferredAvailableTrackIndex();
+    const targetTrack = this.playlist[targetIdx];
+    const hasUploadedTarget = Boolean(
+      targetTrack && this.musicState.trackAvailability[getTrackFilename(targetTrack)]
+    );
+
+    if (!hasUploadedTarget) {
+      this._hasAttemptedOpeningBgm = true;
+      return;
+    }
+
     this._hasAttemptedOpeningBgm = true;
-    const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
-    await this.selectTrack(defaultIdx, { autoPlay: true, restartIfSame: false });
+    await this.selectTrack(targetIdx, { autoPlay: true, restartIfSame: false });
   }
 
   /**
    * Called when Listening Station modal opens.
-   * Preserves ongoing playback seamlessly and never restarts Langit Merah Muda if already playing.
+   * Refreshes file status from server, preserves ongoing playback seamlessly without restarting
+   * an active track, and auto-selects the first uploaded track if default track 1 is missing.
    */
   async syncOnListeningStationOpen() {
-    if (this.musicState.availability === 'unknown') {
+    await this.refreshTrackAvailability({ force: true });
+
+    const curTrack = this.playlist[this.musicState.currentTrackIndex];
+    const curFname = getTrackFilename(curTrack);
+    const curAvailable = Boolean(curFname && this.musicState.trackAvailability[curFname]);
+
+    if (this.musicState.isPlaying) {
+      this._emitMusicUpdate();
+      return;
+    }
+
+    if (!curAvailable) {
+      const preferredIdx = this._findPreferredAvailableTrackIndex();
+      await this.selectTrack(preferredIdx, {
+        autoPlay: false,
+        restartIfSame: false
+      });
+      return;
+    }
+
+    if (this.musicState.availability === 'unknown' || this.musicState.availability === 'missing') {
       await this.selectTrack(this.musicState.currentTrackIndex, {
         autoPlay: false,
         restartIfSame: false
@@ -236,7 +341,9 @@ class AudioSystem {
         this._userPausedMusic = false;
         try {
           await this.bgmAudio.play();
-        } catch {}
+        } catch {
+          this._awaitingGestureResume = true;
+        }
       }
       this._emitMusicUpdate();
       return;
@@ -262,7 +369,7 @@ class AudioSystem {
       return;
     }
 
-    const available = await this._probeTrackUrl(track.audioUrl);
+    const available = await this._probeTrackUrl(track.audioUrl, getTrackFilename(track), true);
     if (token !== this._bgmProbeToken) return;
 
     if (!available) {
@@ -287,8 +394,10 @@ class AudioSystem {
         this._userPausedMusic = false;
         try {
           await this.bgmAudio.play();
+          this._awaitingGestureResume = false;
         } catch {
-          // Browser blocked playback or decode error
+          // Browser blocked autoplay after async probe; resume on next user interaction
+          this._awaitingGestureResume = true;
         }
       }
     }
@@ -298,8 +407,8 @@ class AudioSystem {
 
   async togglePlayPause() {
     if (!this.bgmAudio) return false;
-    if (this.musicState.availability === 'unknown') {
-      await this.selectTrack(this.musicState.currentTrackIndex, { autoPlay: true });
+    if (this.musicState.availability === 'unknown' || this.musicState.availability === 'missing') {
+      await this.selectTrack(this.musicState.currentTrackIndex, { autoPlay: true, restartIfSame: false });
       return this.musicState.isPlaying;
     }
     if (this.musicState.availability !== 'available') {
@@ -315,8 +424,10 @@ class AudioSystem {
     this._userPausedMusic = false;
     try {
       await this.bgmAudio.play();
+      this._awaitingGestureResume = false;
       return true;
     } catch {
+      this._awaitingGestureResume = true;
       return false;
     }
   }

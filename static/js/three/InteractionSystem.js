@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { gameState, MODALS, PHASES } from '../state/GameState.js';
+import { OUTDOOR_EXIT_SPAWN } from './CameraFraming.js';
 
 export const POI_REGISTRY_3D = [
-  { id: 'location', name: 'Pintu Masuk Hachi Garden', x: 0, y: 0.0, z: 28, radius: 5.5, icon: '🌿', label: 'Waktu & Lokasi', modal: MODALS.LOCATION },
-  { id: 'profile', name: 'Couple Profile (Adjie & Daul)', x: 18, y: 2.0, z: -6, radius: 5.8, icon: '💍', label: 'Mengenal Adjie & Daul', modal: MODALS.PROFILE },
-  { id: 'gallery', name: 'Photo Gallery & Cerita', x: 18, y: 2.0, z: 8, radius: 5.5, icon: '📸', label: 'Kumpulan Foto & Cerita', modal: MODALS.GALLERY },
-  { id: 'listening', name: 'Listening Station', x: -24, y: 1.0, z: 8, radius: 6.2, icon: '🎧', label: 'Playlist Perjalanan Kami', modal: MODALS.LISTENING },
-  { id: 'foodcourt', name: 'Food Court Favorit', x: -24, y: 3.2, z: -10, radius: 6.2, icon: '🍜', label: 'Makanan & Cerita Kencan', modal: MODALS.FOODCOURT },
-  { id: 'rsvp', name: 'The Hachi Garden (Restoran & RSVP)', x: 0, y: 5.0, z: -16.5, radius: 6.8, icon: '✉️', label: 'Detail Acara & RSVP', modal: MODALS.RSVP }
+  { id: 'location', name: 'Pintu Masuk The Hachi Garden', x: 0, y: 0.0, z: 28, radius: 5.5, icon: '🌿', label: 'Waktu & Lokasi Acara', modal: MODALS.LOCATION },
+  { id: 'profile', name: 'Profil Kami (Adjie & Daulika)', x: 18, y: 2.0, z: -6, radius: 5.8, icon: '💍', label: 'Profil Mempelai', modal: MODALS.PROFILE },
+  { id: 'gallery', name: 'Galeri Foto', x: 18, y: 2.0, z: 8, radius: 5.5, icon: '📸', label: 'Galeri Foto Kami', modal: MODALS.GALLERY },
+  { id: 'listening', name: 'Listening Station', x: -24, y: 1.0, z: 8, radius: 6.2, icon: '🎧', label: 'Playlist Pilihan Kami', modal: MODALS.LISTENING },
+  { id: 'foodcourt', name: 'Food Court Favorit', x: -24, y: 3.2, z: -10, radius: 6.2, icon: '🍜', label: 'Menu Favorit Kami', modal: MODALS.FOODCOURT },
+  { id: 'rsvp', name: 'The Hachi Garden (RSVP & Aula)', x: 0, y: 5.0, z: -16.5, radius: 6.8, icon: '✉️', label: 'Konfirmasi Kehadiran (RSVP)', modal: MODALS.RSVP }
 ];
 
 export class InteractionSystem {
@@ -70,9 +71,9 @@ export class InteractionSystem {
     if (this.nearbyPOI.id === 'rsvp') {
       const rsvpData = gameState.getState().rsvpData;
       if (rsvpData && rsvpData.attending === true) {
-        // Guest already RSVP'd! Enter Main Reception Hall smoothly
+        // Guest already RSVP'd! Enter Main Reception Hall cleanly
         gameState.setState({
-          lastOutdoorPosition: { x: 0.0, y: 5.0, z: -14.0, rotY: Math.PI },
+          lastOutdoorPosition: { ...OUTDOOR_EXIT_SPAWN },
           gamePhase: PHASES.MAIN_HALL
         });
         return;

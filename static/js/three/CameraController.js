@@ -1,11 +1,18 @@
 import * as THREE from 'three';
 import { TerrainManager } from '../world/TerrainManager.js';
 import { gameState } from '../state/GameState.js';
+import {
+  OUTDOOR_EXIT_CAMERA_CONFIG,
+  interpolateSphericalReveal,
+  isPointInsideHachiBuilding
+} from './CameraFraming.js';
 
 export class CameraController {
   constructor(camera) {
     this.camera = camera;
     this.targetPosition = new THREE.Vector3(0, 0, 0);
+    this.occluderMeshes = [];
+    this.exitReveal = null;
 
     // Spherical Orbit Camera State (Wide Indonesian Landscape Vista or Landmark Inspection)
     const v = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('view') : null;
@@ -99,11 +106,17 @@ export class CameraController {
       this.pitch = 0.24; this.targetPitch = 0.24;
       this.baseRadius = 17.0;
     } else if (hasOutdoorPos) {
-      this.yaw = Math.PI;
-      this.targetYaw = Math.PI;
-      this.pitch = 0.22;
-      this.targetPitch = 0.22;
-      this.baseRadius = 8.0;
+      // Unobstructed +Z elevated 3/4 view overlooking Grand Staircase & Hachi facade
+      this.yaw = OUTDOOR_EXIT_CAMERA_CONFIG.startYaw;
+      this.targetYaw = OUTDOOR_EXIT_CAMERA_CONFIG.endYaw;
+      this.pitch = OUTDOOR_EXIT_CAMERA_CONFIG.startPitch;
+      this.targetPitch = OUTDOOR_EXIT_CAMERA_CONFIG.endPitch;
+      this.baseRadius = OUTDOOR_EXIT_CAMERA_CONFIG.endRadius;
+      this.currentRadius = OUTDOOR_EXIT_CAMERA_CONFIG.startRadius;
+      this.exitReveal = {
+        elapsed: 0,
+        duration: OUTDOOR_EXIT_CAMERA_CONFIG.duration
+      };
     } else {
       this.yaw = -0.32;
       this.targetYaw = -0.32;
@@ -115,7 +128,7 @@ export class CameraController {
     this.minPitch = 0.12; // ~7° low angle vista
     this.maxPitch = 1.25; // ~71° top-down garden view
 
-    this.damping = 0.08; // Smooth dampening factor
+    this.damping = 0.09; // Smooth dampening factor
     this.sensitivity = 0.0035; // Responsive cinematic touch/mouse sensitivity
 
     // Zoom State
@@ -131,6 +144,17 @@ export class CameraController {
     this.cinematicStartPos = new THREE.Vector3(22, 28, 42); // High hill overlook from entrance
     this.cinematicTargetLook = new THREE.Vector3(-10, 6, -18); // Sweeping over tea terraces toward Pendopo & mountains
     this.onCinematicComplete = null;
+
+    // Scratch vectors & reusable raycaster to avoid GC churn on 60Hz loop
+    this._targetLook = new THREE.Vector3();
+    this._desiredCameraPos = new THREE.Vector3();
+    this._cinematicLook = new THREE.Vector3();
+    this._rayDir = new THREE.Vector3();
+    this._occlusionRay = new THREE.Raycaster();
+  }
+
+  setOccluderMeshes(meshes) {
+    this.occluderMeshes = Array.isArray(meshes) ? meshes.filter(Boolean) : [];
   }
 
   setTarget(position) {
@@ -143,7 +167,7 @@ export class CameraController {
     }
     this.targetPosition.set(position.x, position.y + targetYOffset, position.z);
     if (isFirst && !this.isCinematic) {
-      const radius = this.baseRadius * this.currentZoom;
+      const radius = (this.currentRadius || this.baseRadius) * this.currentZoom;
       const curOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * radius;
       const curOffsetY = Math.sin(this.pitch) * radius;
       const curOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * radius;
@@ -158,6 +182,9 @@ export class CameraController {
 
   rotate(deltaYaw, deltaPitch) {
     if (this.isCinematic) return;
+    if (this.exitReveal) {
+      this.exitReveal = null;
+    }
     this.targetYaw += deltaYaw * this.sensitivity;
     this.targetPitch += deltaPitch * this.sensitivity;
 
@@ -167,7 +194,9 @@ export class CameraController {
 
   zoom(delta) {
     if (this.isCinematic) return;
-    // Modify target zoom factor smoothly
+    if (this.exitReveal) {
+      this.exitReveal = null;
+    }
     this.targetZoom = Math.max(this.minZoom, Math.min(this.maxZoom, this.targetZoom + delta));
   }
 
@@ -185,72 +214,100 @@ export class CameraController {
     this.camera.lookAt(this.cinematicTargetLook);
   }
 
-  update() {
+  update(delta = 0.016) {
+    const dtScale = Math.min(3.0, Math.max(0.2, delta * 60));
+
+    if (this.exitReveal) {
+      this.exitReveal.elapsed += delta;
+      const progress = Math.min(1.0, this.exitReveal.elapsed / Math.max(0.1, this.exitReveal.duration));
+      const reveal = interpolateSphericalReveal(OUTDOOR_EXIT_CAMERA_CONFIG, progress);
+      this.yaw = reveal.yaw;
+      this.targetYaw = reveal.yaw;
+      this.pitch = reveal.pitch;
+      this.targetPitch = reveal.pitch;
+      this.baseRadius = reveal.radius;
+      if (progress >= 1.0) {
+        this.exitReveal = null;
+      }
+    }
+
     // Smooth lerp zoom, yaw, and pitch angles
-    this.currentZoom += (this.targetZoom - this.currentZoom) * 0.1;
-    this.yaw += (this.targetYaw - this.yaw) * 0.12;
-    this.pitch += (this.targetPitch - this.pitch) * 0.12;
+    this.currentZoom += (this.targetZoom - this.currentZoom) * Math.min(1, 0.1 * dtScale);
+    this.yaw += (this.targetYaw - this.yaw) * Math.min(1, 0.12 * dtScale);
+    this.pitch += (this.targetPitch - this.pitch) * Math.min(1, 0.12 * dtScale);
 
     const aspect = this.camera.aspect || 1.0;
     let radius = this.baseRadius * this.currentZoom;
     if (aspect < 1.0) {
-      // Mobile portrait mode compensation: subtle radius adjustment so character remains heroic
       radius *= (1.0 + (1.0 - aspect) * 0.15);
     }
-    const baseOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * radius;
-    const baseOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * radius;
 
-    // Check terrain clearance and obstacle clipping along line-of-sight (spring-arm)
-    let safeRadius = radius;
-    // Step along the ray from target to desired pos to see if ray intersects solid buildings
-    const stepCount = 5;
-    for (let i = 1; i <= stepCount; i++) {
-      const frac = i / stepCount;
-      const testX = this.targetPosition.x + baseOffsetX * frac;
-      const testZ = this.targetPosition.z + baseOffsetZ * frac;
-      // Building collision box around Hachi Garden exterior (-12 to 12, -30 to -17)
-      if (testX >= -12 && testX <= 12 && testZ >= -30 && testZ <= -18) {
-        // Obstacle detected, shorten camera distance to prevent clipping through exterior walls
-        safeRadius = Math.min(safeRadius, radius * Math.max(0.35, (frac - 0.15)));
-        break;
-      }
-    }
-
-    // Smoothly adapt spring-arm radius to prevent abrupt camera pops near walls
-    if (typeof this.currentRadius !== 'number') this.currentRadius = radius;
-    this.currentRadius += (safeRadius - this.currentRadius) * 0.18;
-
-    const curOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch) * this.currentRadius;
-    const curOffsetY = Math.sin(this.pitch) * this.currentRadius;
-    const curOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch) * this.currentRadius;
-
-    // Optical focus target: aim at avatar torso/chest (y + 1.15 on portrait, y + 0.75 on landscape)
     const lookYOffset = aspect < 1.0 ? 1.15 : 0.75;
-    const targetLook = new THREE.Vector3(
+    this._targetLook.set(
       this.targetPosition.x,
       this.targetPosition.y + lookYOffset,
       this.targetPosition.z
     );
 
-    const testCamX = this.targetPosition.x + curOffsetX;
-    const testCamZ = this.targetPosition.z + curOffsetZ;
+    const unitOffsetX = Math.sin(this.yaw) * Math.cos(this.pitch);
+    const unitOffsetY = Math.sin(this.pitch);
+    const unitOffsetZ = Math.cos(this.yaw) * Math.cos(this.pitch);
+
+    let safeRadius = radius;
+
+    // 1. Structural Hachi Restaurant envelope check along sightline
+    const stepCount = 6;
+    for (let i = 1; i <= stepCount; i++) {
+      const frac = i / stepCount;
+      const testX = this._targetLook.x + unitOffsetX * radius * frac;
+      const testY = this._targetLook.y + unitOffsetY * radius * frac;
+      const testZ = this._targetLook.z + unitOffsetZ * radius * frac;
+      if (isPointInsideHachiBuilding(testX, testY, testZ)) {
+        safeRadius = Math.min(safeRadius, Math.max(2.6, radius * Math.max(0.28, frac - 0.16)));
+        break;
+      }
+    }
+
+    // 2. Raycast line-of-sight obstruction check against landmarks/walls
+    if (this.occluderMeshes.length > 0 && !this.isCinematic) {
+      this._rayDir.set(unitOffsetX, unitOffsetY, unitOffsetZ).normalize();
+      this._occlusionRay.set(this._targetLook, this._rayDir);
+      this._occlusionRay.near = 0.5;
+      this._occlusionRay.far = safeRadius;
+
+      const hits = this._occlusionRay.intersectObjects(this.occluderMeshes, true);
+      for (const hit of hits) {
+        if (!hit.object || hit.object.visible === false) continue;
+        if (hit.distance >= 1.6 && hit.distance < safeRadius) {
+          safeRadius = Math.max(2.4, hit.distance - 0.65);
+          break;
+        }
+      }
+    }
+
+    if (typeof this.currentRadius !== 'number') this.currentRadius = safeRadius;
+    const radiusLerpSpeed = safeRadius < this.currentRadius ? 0.28 : 0.14;
+    this.currentRadius += (safeRadius - this.currentRadius) * Math.min(1, radiusLerpSpeed * dtScale);
+
+    const testCamX = this._targetLook.x + unitOffsetX * this.currentRadius;
+    const testCamY = this._targetLook.y + unitOffsetY * this.currentRadius;
+    const testCamZ = this._targetLook.z + unitOffsetZ * this.currentRadius;
     const terrainFloor = TerrainManager.getHeight(testCamX, testCamZ) + 1.25;
 
-    const desiredCameraPos = new THREE.Vector3(
+    this._desiredCameraPos.set(
       testCamX,
-      Math.max(terrainFloor, targetLook.y + curOffsetY),
+      Math.max(terrainFloor, testCamY),
       testCamZ
     );
 
     if (this.isCinematic) {
-      this.cinematicProgress += 0.016 / this.cinematicDuration; // ~60fps step
+      this.cinematicProgress += delta / this.cinematicDuration;
       const t = Math.min(1.0, this.cinematicProgress);
       const easeT = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-      this.camera.position.lerpVectors(this.cinematicStartPos, desiredCameraPos, easeT);
-
-      const cinematicLook = new THREE.Vector3().lerpVectors(this.cinematicTargetLook, targetLook, easeT);
-      this.camera.lookAt(cinematicLook);
+      this.camera.position.lerpVectors(this.cinematicStartPos, this._desiredCameraPos, easeT);
+      this._cinematicLook.lerpVectors(this.cinematicTargetLook, this._targetLook, easeT);
+      this.camera.lookAt(this._cinematicLook);
 
       if (t >= 1.0) {
         this.isCinematic = false;
@@ -259,18 +316,16 @@ export class CameraController {
       return;
     }
 
-    // Smooth lerp follow for position
     if (this.camera.position.lengthSq() < 0.1) {
-      this.camera.position.copy(desiredCameraPos);
+      this.camera.position.copy(this._desiredCameraPos);
     } else {
-      this.camera.position.lerp(desiredCameraPos, this.damping);
+      this.camera.position.lerp(this._desiredCameraPos, Math.min(1, this.damping * dtScale));
     }
 
-    // Smooth lerp for look-at target to eliminate micro-jitter on rapid turns & stair traversal
     if (!this.currentLook) {
-      this.currentLook = targetLook.clone();
+      this.currentLook = this._targetLook.clone();
     } else {
-      this.currentLook.lerp(targetLook, this.damping * 1.5);
+      this.currentLook.lerp(this._targetLook, Math.min(1, this.damping * 1.5 * dtScale));
     }
     this.camera.lookAt(this.currentLook);
   }

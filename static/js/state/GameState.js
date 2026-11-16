@@ -1,3 +1,10 @@
+import {
+  buildGuestStorageKey,
+  getMaxGuestQuota,
+  normalizeInvitationCategory,
+  sanitizeGuestText
+} from '../utils/rsvpContract.js';
+
 /**
  * GameState - Central Observable State Manager
  */
@@ -26,30 +33,42 @@ export const MODALS = {
 class GameState {
   constructor() {
     this.listeners = new Set();
+    const guestName = this.getGuestNameFromURL();
+    const guestCategory = this.getGuestCategoryFromURL();
+    const inviteCode = this.getInviteCodeFromURL();
+    const storageKey = buildGuestStorageKey(guestName, guestCategory, inviteCode);
+
     this.state = {
       gamePhase: this.getInitialPhaseFromURL(),
-      guestName: this.getGuestNameFromURL(),
-      guestCategory: this.getGuestCategoryFromURL(),
+      guestName,
+      guestCategory,
+      inviteCode,
+      rsvpStorageKey: storageKey,
       playerConfig: {
         gender: 'male', // 'male' | 'female'
         skinColor: '#F1C27D',
         hairStyle: 'short', // 'short' | 'long' | 'wavy' | 'bun' | 'hijab' | 'cap'
         hairColor: '#2C1B18',
-        outfit: 'traditional_gold', // 'traditional_gold' | 'traditional_maroon' | 'tuxedo' | 'dress'
+        outfit: 'traditional_gold', // 'traditional_gold' | 'traditional_maroon' | 'tuxedo' | 'beskap_hitam' | 'dress' | 'kebaya_putih'
         accessory: 'none', // 'none' | 'glasses' | 'flower' | 'crown'
         expression: 'happy' // 'happy' | 'wink' | 'smile'
       },
       playerPosition: { x: 400, y: 300, direction: 'down', isMoving: false },
       activeModal: this.getInitialModalFromURL(),
-      rsvpData: this.loadRSVP(),
+      rsvpData: this.loadRSVP(guestName, guestCategory, storageKey),
       audioState: { isBgmPlaying: false, isMuted: false }
     };
   }
 
   getGuestCategoryFromURL() {
     const params = new URLSearchParams(window.location.search);
-    const cat = (params.get('cat') || params.get('category') || params.get('group') || 'A').toUpperCase().trim();
-    return cat === 'B' ? 'B' : 'A';
+    const cat = params.get('cat') || params.get('category') || params.get('group') || 'A';
+    return normalizeInvitationCategory(cat);
+  }
+
+  getInviteCodeFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    return sanitizeGuestText(params.get('invite') || params.get('code') || '', 32);
   }
 
   getInitialModalFromURL() {
@@ -64,6 +83,9 @@ class GameState {
 
   getInitialPhaseFromURL() {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('autostart') === '1') {
+      return PHASES.EXPLORATION;
+    }
     const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const isDebug = params.get('debug') === '1' || params.get('debug') === 'true';
     if (isLocal || isDebug) {
@@ -78,26 +100,53 @@ class GameState {
 
   getGuestNameFromURL() {
     const params = new URLSearchParams(window.location.search);
-    const raw = params.get('to');
-    if (!raw) return 'Tamu Undangan';
-    // Strip control characters, trim, and cap length to 60 characters
-    const sanitized = raw.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
-    return sanitized.slice(0, 60) || 'Tamu Undangan';
+    const sanitized = sanitizeGuestText(params.get('to') || '', 60);
+    return sanitized || 'Tamu Undangan';
   }
 
-  loadRSVP() {
+  loadRSVP(guestName, guestCategory, storageKey) {
+    const maxQuota = getMaxGuestQuota(guestCategory);
+    const fallback = { attending: null, guestCount: 1, table: null, seat: null };
     try {
-      const saved = localStorage.getItem('wedding_rsvp');
-      return saved ? JSON.parse(saved) : { attending: null, guestCount: 1, table: null, seat: null };
+      const saved = localStorage.getItem(storageKey);
+      if (!saved) return fallback;
+      const parsed = JSON.parse(saved);
+      if (!parsed || typeof parsed !== 'object') return fallback;
+
+      // Guard against cross-guest leakage even on similar slugs
+      const savedName = sanitizeGuestText(parsed.guestName || '', 60).toLowerCase();
+      const expectedName = sanitizeGuestText(guestName, 60).toLowerCase();
+      const savedCat = normalizeInvitationCategory(parsed.invitation_category || parsed.category);
+      if (savedName !== expectedName || savedCat !== guestCategory) {
+        return fallback;
+      }
+
+      const clampedCount = parsed.attending === false
+        ? 0
+        : Math.max(1, Math.min(maxQuota, parseInt(parsed.guestCount ?? 1, 10) || 1));
+
+      return { ...fallback, ...parsed, guestCount: clampedCount };
     } catch (e) {
-      return { attending: null, guestCount: 1, table: null, seat: null };
+      return fallback;
     }
   }
 
   saveRSVP(data) {
-    this.state.rsvpData = { ...this.state.rsvpData, ...data };
+    const key = this.state.rsvpStorageKey || buildGuestStorageKey(this.state.guestName, this.state.guestCategory, this.state.inviteCode);
+    const maxQuota = getMaxGuestQuota(this.state.guestCategory);
+    const normalizedCount = data.attending === false
+      ? 0
+      : Math.max(1, Math.min(maxQuota, parseInt(data.guestCount ?? this.state.rsvpData?.guestCount ?? 1, 10) || 1));
+
+    this.state.rsvpData = {
+      ...this.state.rsvpData,
+      ...data,
+      guestName: this.state.guestName,
+      invitation_category: this.state.guestCategory,
+      guestCount: normalizedCount
+    };
     try {
-      localStorage.setItem('wedding_rsvp', JSON.stringify(this.state.rsvpData));
+      localStorage.setItem(key, JSON.stringify(this.state.rsvpData));
     } catch (e) {
       console.warn('LocalStorage unavailable');
     }

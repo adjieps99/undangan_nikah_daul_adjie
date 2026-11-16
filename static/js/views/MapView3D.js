@@ -13,8 +13,23 @@ export class MapView3D {
     this.promptEl = null;
     this.animFrameId = null;
     this.promptInterval = null;
+    this._timeouts = new Set();
+    this._activeToasts = new Set();
+    this._windowCleanups = [];
+    this._isDestroyed = false;
+    this._lastRadarText = '';
+    this._lastPromptId = null;
     this.handleInteractBound = () => this.handleInteraction();
     this.isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  }
+
+  _setTimer(fn, ms) {
+    const id = setTimeout(() => {
+      this._timeouts.delete(id);
+      if (!this._isDestroyed) fn();
+    }, ms);
+    this._timeouts.add(id);
+    return id;
   }
 
   render() {
@@ -22,7 +37,7 @@ export class MapView3D {
     const container = document.createElement('div');
     container.className = 'map-view-container';
 
-    // 1. HUD Top Bar (Share Button removed for premium invitation aesthetics)
+    // 1. HUD Top Bar
     const hudBar = document.createElement('div');
     hudBar.className = 'map-hud-bar';
     hudBar.innerHTML = `
@@ -30,12 +45,12 @@ export class MapView3D {
         <div class="hud-avatar-thumb">${generateAvatarSVG(state.playerConfig, 36)}</div>
         <div class="hud-guest-name"></div>
       </div>
-      <div class="hud-title desktop-only">ADJIE &amp; DAULIKA — THE HACHI GARDEN</div>
+      <div class="hud-title desktop-only">ADJIE &amp; DAULIKA — THE GARDEN OF US</div>
       <div class="hud-actions" style="display: flex; gap: 6px; align-items: center;">
         <button class="retro-btn retro-btn-secondary hud-audio-btn" title="Musik & Efek Suara" style="padding: 6px 10px; font-size: 14px; min-width: 38px;">
           ${audioSystem.isMuted ? '🔇' : '🔊'}
         </button>
-        <button class="retro-btn retro-btn-secondary hud-avatar-btn">✏️ EDIT AVATAR</button>
+        <button class="retro-btn retro-btn-secondary hud-avatar-btn">✏️ Edit Avatar</button>
       </div>
     `;
 
@@ -50,6 +65,12 @@ export class MapView3D {
         const isMuted = audioSystem.toggleMute();
         audioBtn.textContent = isMuted ? '🔇' : '🔊';
       });
+      const onMuteSync = (ev) => {
+        const muted = ev && ev.detail ? Boolean(ev.detail.isMuted) : audioSystem.isMuted;
+        audioBtn.textContent = muted ? '🔇' : '🔊';
+      };
+      window.addEventListener('audio-mute-changed', onMuteSync);
+      this._windowCleanups.push(() => window.removeEventListener('audio-mute-changed', onMuteSync));
     }
 
     hudBar.querySelector('.hud-avatar-btn').addEventListener('click', () => {
@@ -87,7 +108,7 @@ export class MapView3D {
     this.loadingOverlay.innerHTML = `
       <div class="pixel-box loading-box">
         <div class="loading-spinner">🌸</div>
-        <div class="loading-title">MEMPERSIAPKAN HACHI GARDEN 3D...</div>
+        <div class="loading-title">MEMPERSIAPKAN TAMAN KAMI...</div>
         <div class="loading-subtitle"></div>
       </div>
     `;
@@ -100,7 +121,7 @@ export class MapView3D {
     // Initialize Controls & ThreeScene
     this.controls = new Controls();
 
-    setTimeout(() => {
+    this._setTimer(() => {
       this.threeScene = new ThreeScene(canvasWrapper);
       this.controls.createVirtualJoystick(container);
       this.threeScene.start();
@@ -114,22 +135,20 @@ export class MapView3D {
       // Fade out loading overlay & Trigger 3-Second Cinematic Reveal
       if (this.loadingOverlay) {
         this.loadingOverlay.style.opacity = '0';
-        setTimeout(() => {
+        this._setTimer(() => {
           if (this.loadingOverlay && this.loadingOverlay.parentNode) {
             this.loadingOverlay.parentNode.removeChild(this.loadingOverlay);
             this.loadingOverlay = null;
           }
 
-          // If in inspection bookmark view, snap camera target immediately
           const viewParam = new URLSearchParams(window.location.search).get('view');
           if (viewParam && this.threeScene && this.threeScene.character) {
             this.threeScene.cameraController.setTarget(this.threeScene.character.getPosition());
           }
 
-          // Trigger Cinematic Camera Sweep if not in specific inspection view
           if (!viewParam && this.threeScene && this.threeScene.cameraController) {
             this.threeScene.cameraController.startCinematicIntro(() => {
-              // Welcome Toast Banner on Cinematic Finish
+              if (this._isDestroyed) return;
               const toast = document.createElement('div');
               toast.className = 'retro-toast';
               toast.textContent = '🌸 Selamat Datang, ';
@@ -138,48 +157,56 @@ export class MapView3D {
               toast.appendChild(strongName);
               toast.appendChild(document.createTextNode('!'));
               document.body.appendChild(toast);
-              setTimeout(() => {
+              this._activeToasts.add(toast);
+              this._setTimer(() => {
                 toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 400);
+                this._setTimer(() => {
+                  this._activeToasts.delete(toast);
+                  toast.remove();
+                }, 400);
               }, 2500);
 
-              // First-time Exploration Tutorial Hint Toast
-              setTimeout(() => {
+              this._setTimer(() => {
                 const hintToast = document.createElement('div');
                 hintToast.className = 'retro-toast tutorial-hint-toast';
                 hintToast.innerHTML = `
-                  <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: #ffe082;">🌸 PANDUAN JELAJAH KEBUN TEH 🌸</div>
+                  <div style="font-size: 11px; font-weight: bold; margin-bottom: 5px; color: #ffe082;">🌸 PANDUAN JELAJAH TAMAN 🌸</div>
                   <div style="font-size: 9px; line-height: 1.6; color: #fff;">
                     🕹️ <strong>Gerak:</strong> Gunakan Joystick (Kiri) / Tombol WASD<br>
                     👆 <strong>Putar:</strong> Geser 1 jari / Drag mouse untuk putar sudut pandang<br>
                     🔍 <strong>Zoom:</strong> Cubit 2 jari (Pinch) / Scroll mouse untuk zoom<br>
-                    💌 <strong>Buka:</strong> Dekati & Ketuk Landmark untuk informasi acara
+                    💌 <strong>Buka:</strong> Dekati &amp; Ketuk titik acara untuk melihat detail
                   </div>
                 `;
                 document.body.appendChild(hintToast);
+                this._activeToasts.add(hintToast);
 
-                setTimeout(() => {
+                this._setTimer(() => {
                   hintToast.style.opacity = '0';
-                  setTimeout(() => hintToast.remove(), 500);
+                  this._setTimer(() => {
+                    this._activeToasts.delete(hintToast);
+                    hintToast.remove();
+                  }, 500);
                 }, 5500);
               }, 1000);
             });
           }
         }, 300);
       }
-    }, 100);
+    }, 60);
 
-    // Proximity check interval for floating prompt
+    // Proximity check interval for floating prompt (only mutates DOM on change)
     this.promptInterval = setInterval(() => {
       if (!this.threeScene || !this.threeScene.interactionSystem) return;
 
-      // Pause prompt if a modal is open
       if (gameState.getState().activeModal) {
-        this.promptEl.classList.add('hidden');
+        if (this._lastPromptId !== null) {
+          this._lastPromptId = null;
+          this.promptEl.classList.add('hidden');
+        }
         return;
       }
 
-      // Real-time Navigation Radar indicator update
       if (this.radarBar && this.threeScene && this.threeScene.character) {
         const charPos = this.threeScene.character.getPosition();
         let closestPOI = null;
@@ -195,28 +222,36 @@ export class MapView3D {
 
         if (closestPOI) {
           const distInt = Math.round(minDistance);
-          const radarLabel = this.radarBar.querySelector('.radar-label');
-          if (radarLabel) {
-            radarLabel.innerHTML = `${closestPOI.icon} <strong>${closestPOI.name}</strong> • ${distInt}m`;
+          const radarKey = `${closestPOI.id}:${distInt}`;
+          if (radarKey !== this._lastRadarText) {
+            this._lastRadarText = radarKey;
+            const radarLabel = this.radarBar.querySelector('.radar-label');
+            if (radarLabel) {
+              radarLabel.innerHTML = `${closestPOI.icon} <strong>${closestPOI.name}</strong> • ${distInt}m`;
+            }
           }
         }
       }
 
       const poi = this.threeScene.interactionSystem.nearbyPOI;
-      if (poi) {
-        const hintText = this.isMobile ? 'Tap di sini untuk membuka' : 'Tekan [E] atau Tap di sini';
-        this.promptEl.innerHTML = `
-          <div class="prompt-icon">${poi.icon}</div>
-          <div class="prompt-text">
-            <strong>${poi.label}</strong>
-            <span>${hintText}</span>
-          </div>
-        `;
-        this.promptEl.classList.remove('hidden');
-        this.promptEl.onclick = () => this.handleInteraction();
-      } else {
-        this.promptEl.classList.add('hidden');
-        this.promptEl.onclick = null;
+      const nextPromptId = poi ? poi.id : null;
+      if (nextPromptId !== this._lastPromptId) {
+        this._lastPromptId = nextPromptId;
+        if (poi) {
+          const hintText = this.isMobile ? 'Tap di sini untuk membuka' : 'Tekan [E] atau Tap di sini';
+          this.promptEl.innerHTML = `
+            <div class="prompt-icon">${poi.icon}</div>
+            <div class="prompt-text">
+              <strong>${poi.label}</strong>
+              <span>${hintText}</span>
+            </div>
+          `;
+          this.promptEl.classList.remove('hidden');
+          this.promptEl.onclick = () => this.handleInteraction();
+        } else {
+          this.promptEl.classList.add('hidden');
+          this.promptEl.onclick = null;
+        }
       }
     }, 100);
 
@@ -312,7 +347,7 @@ export class MapView3D {
       }
     });
 
-    window.addEventListener('mousemove', (e) => {
+    const onMouseMove = (e) => {
       if (isModalActive()) {
         isMouseDown = false;
         return;
@@ -326,17 +361,24 @@ export class MapView3D {
           this.threeScene.cameraController.rotate(deltaX, -deltaY);
         }
       }
-    });
+    };
 
-    window.addEventListener('mouseup', () => {
+    const onMouseUp = () => {
       isMouseDown = false;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    this._windowCleanups.push(() => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     });
   }
 
   updateControlsLoop() {
+    if (this._isDestroyed) return;
     const activeModal = gameState.getState().activeModal;
 
-    // Pause character movement input if a modal is currently open
     if (!activeModal && this.threeScene && this.threeScene.character && this.controls) {
       const { dx, dy, intensity, jump } = this.controls.getMovementVector();
       this.threeScene.character.move(dx, dy, intensity, jump, this.threeScene.camera);
@@ -352,26 +394,31 @@ export class MapView3D {
     }
   }
 
-  copyShareLinkFallback(shareUrl) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(shareUrl).then(() => {
-          alert('📋 Link Undangan berhasil disalin!');
-        }).catch(() => {
-          prompt('Salin Link Undangan:', shareUrl);
-        });
-      } else {
-        prompt('Salin Link Undangan:', shareUrl);
-      }
-    } catch (e) {
-      prompt('Salin Link Undangan:', shareUrl);
-    }
-  }
-
   destroy() {
+    this._isDestroyed = true;
     window.removeEventListener('player-interact', this.handleInteractBound);
-    if (this.promptInterval) clearInterval(this.promptInterval);
-    if (this.animFrameId) cancelAnimationFrame(this.animFrameId);
+    while (this._windowCleanups.length > 0) {
+      const cleanup = this._windowCleanups.pop();
+      try { cleanup(); } catch {}
+    }
+    this._timeouts.forEach((id) => clearTimeout(id));
+    this._timeouts.clear();
+    this._activeToasts.forEach((t) => {
+      try { t.remove(); } catch {}
+    });
+    this._activeToasts.clear();
+    if (this.promptInterval) {
+      clearInterval(this.promptInterval);
+      this.promptInterval = null;
+    }
+    if (this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = null;
+    }
+    if (this.controls && typeof this.controls.destroy === 'function') {
+      this.controls.destroy();
+      this.controls = null;
+    }
     if (this.threeScene) {
       this.threeScene.dispose();
       this.threeScene = null;

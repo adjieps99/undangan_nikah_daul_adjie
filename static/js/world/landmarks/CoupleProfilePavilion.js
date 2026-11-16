@@ -40,12 +40,33 @@ export class CoupleProfilePavilion {
       this.group.add(beam);
     }
 
-    // 4. Carved Name Banner: "ADJIE & DAUL"
-    const banner = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.6, 0.08), goldMat);
+    // 4. Carved Name Banner: "ADJIE & DAULIKA"
+    const bannerCanvas = document.createElement('canvas');
+    bannerCanvas.width = 512;
+    bannerCanvas.height = 96;
+    const bctx = bannerCanvas.getContext('2d');
+    bctx.fillStyle = '#2d1c10';
+    bctx.fillRect(0, 0, 512, 96);
+    bctx.strokeStyle = '#d4af37';
+    bctx.lineWidth = 6;
+    bctx.strokeRect(6, 6, 500, 84);
+    bctx.fillStyle = '#f5e6a3';
+    bctx.font = 'bold 34px Georgia, serif';
+    bctx.textAlign = 'center';
+    bctx.textBaseline = 'middle';
+    bctx.fillText('ADJIE & DAULIKA', 256, 48);
+    const bannerTex = new THREE.CanvasTexture(bannerCanvas);
+    bannerTex.colorSpace = THREE.SRGBColorSpace;
+
+    const banner = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.65, 0.08), [
+      goldMat, goldMat, goldMat, goldMat,
+      new THREE.MeshLambertMaterial({ map: bannerTex }),
+      new THREE.MeshLambertMaterial({ map: bannerTex })
+    ]);
     banner.position.set(0, 3.2, 3.0);
     this.group.add(banner);
 
-    // 5. Centerpiece Portrait Easel with Framed Photo
+    // 5. Centerpiece Easel with Wedding Monogram Plaque
     const easelMat = new THREE.MeshLambertMaterial({ color: '#2a1a0e' });
     const easelLeg1 = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.2), easelMat);
     easelLeg1.position.set(-0.5, 1.1, -0.4);
@@ -62,14 +83,37 @@ export class CoupleProfilePavilion {
     easelBack.rotation.x = -0.25;
     this.group.add(easelBack);
 
-    // Golden Frame
     const frame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 0.08), goldMat);
     frame.position.set(0, 1.4, -0.4);
     frame.rotation.x = -0.1;
     this.group.add(frame);
 
-    // Canvas Art Inside Frame
-    const canvasArt = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.0), new THREE.MeshLambertMaterial({ color: '#ffcad4' }));
+    const plaqueCanvas = document.createElement('canvas');
+    plaqueCanvas.width = 512;
+    plaqueCanvas.height = 384;
+    const pctx = plaqueCanvas.getContext('2d');
+    pctx.fillStyle = '#faf5ea';
+    pctx.fillRect(0, 0, 512, 384);
+    pctx.strokeStyle = '#c5a059';
+    pctx.lineWidth = 8;
+    pctx.strokeRect(18, 18, 476, 348);
+    pctx.fillStyle = '#8b651a';
+    pctx.font = 'bold 22px Georgia, serif';
+    pctx.textAlign = 'center';
+    pctx.fillText('THE GARDEN OF US', 256, 118);
+    pctx.fillStyle = '#241a12';
+    pctx.font = 'bold 42px Georgia, serif';
+    pctx.fillText('Adjie & Daulika', 256, 198);
+    pctx.fillStyle = '#6f5432';
+    pctx.font = 'italic 22px Georgia, serif';
+    pctx.fillText('5 Desember 2026', 256, 268);
+    const plaqueTex = new THREE.CanvasTexture(plaqueCanvas);
+    plaqueTex.colorSpace = THREE.SRGBColorSpace;
+
+    const canvasArt = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.4, 1.0),
+      new THREE.MeshLambertMaterial({ map: plaqueTex })
+    );
     canvasArt.position.set(0, 1.4, -0.35);
     canvasArt.rotation.x = -0.1;
     this.group.add(canvasArt);

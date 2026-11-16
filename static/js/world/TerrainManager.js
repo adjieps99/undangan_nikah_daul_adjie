@@ -37,10 +37,10 @@ export class TerrainManager {
       return 1.0;
     }
 
-    // Staircase 2: Connecting Central Terrace (y=2.0, x=-8.0) down to Music Terrace (y=1.0, x=-13.0)
-    // Runs along x in [-13.0, -8.0], z in [5.8, 10.2]
-    if (x <= -8.0 && x >= -13.0 && z >= 5.8 && z <= 10.2) {
-      const t = (-8.0 - x) / 5.0; // 0.0 at x=-8.0, 1.0 at x=-13.0
+    // Staircase 2: Connecting Central Terrace (y=2.0, x=-8.5) down to Music Terrace (y=1.0, x=-14.0)
+    // Continuous 5.5m ramp with zero dead gap at -14..-13
+    if (x <= -8.5 && x >= -14.0 && z >= 5.8 && z <= 10.2) {
+      const t = (-8.5 - x) / 5.5; // 0.0 at x=-8.5 (y=2.0), 1.0 at x=-14.0 (y=1.0)
       return 2.0 - Math.max(0, Math.min(1, t)) * (2.0 - 1.0);
     }
 
@@ -138,5 +138,22 @@ export class TerrainManager {
     }
 
     return false;
+  }
+
+  /**
+   * Filter raycast hits cleanly against analytical terrain baseline so stray geometry
+   * never causes floating/clipping spikes on walkable surfaces.
+   */
+  static resolveFilteredGroundHeight(x, z, hitY = null) {
+    const baselineY = this.getHeight(x, z);
+    if (typeof hitY !== 'number' || !Number.isFinite(hitY)) {
+      return baselineY;
+    }
+    // Accept true top surfaces (e.g. +0.04m stone paving or smooth stair ramp) within physical tolerance
+    const delta = hitY - baselineY;
+    if (delta >= -0.35 && delta <= 0.45) {
+      return hitY;
+    }
+    return baselineY;
   }
 }

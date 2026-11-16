@@ -1,8 +1,26 @@
+import { ASSET_MANIFEST, getTrackFilename, fetchAssetStatus } from '../config/assetManifest.js';
+
 /**
- * Procedural Web Audio Sound & Atmosphere Engine for The Wedding Adventure (3D Hachi Garden).
- * Uses pure Web Audio API with zero external asset dependencies or network latency.
- * Provides ambient mountain twilight garden soundscapes, Indonesian gamelan acoustic chimes,
- * footstep strides, jump effects, and interactive UI chimes.
+ * Pure helper to determine whether selecting a track in the shared audio manager
+ * should preserve playback seamlessly vs reload the audio source.
+ */
+export function shouldPreservePlaybackOnSelect({
+  currentIndex,
+  targetIndex,
+  restartIfSame = false,
+  hasLoadedSource = false,
+  availability = 'unknown'
+}) {
+  if (restartIfSame) return false;
+  if (currentIndex !== targetIndex) return false;
+  return hasLoadedSource || availability === 'available';
+}
+
+/**
+ * AudioSystem — Unified Sound, Ambient & Shared Music Manager
+ * - Single shared HTML5 Audio BGM channel for the entire app (Cover -> Avatar -> Opening -> Garden -> Main Hall)
+ * - Web Audio API ambient wind/chimes (yields gracefully when BGM track is playing) & UI/footstep SFX
+ * - Zero duplicate players inside ListeningStationModal; mute state is global and persistent
  */
 class AudioSystem {
   constructor() {
@@ -15,32 +33,328 @@ class AudioSystem {
     this.ambientInterval = null;
     this.lastFootstepTime = 0;
 
-    // Load persisted mute preference
-    try {
-      this.isMuted = localStorage.getItem('wedding_game_muted') === 'true';
-    } catch (e) {}
+    // Shared Music Player Channel State
+    this.playlist = ASSET_MANIFEST.audio.playlist || [];
+    this.availabilityCache = new Map();
+    this.bgmAudio = null;
+    this._bgmProbeToken = 0;
+    this._hasAttemptedOpeningBgm = false;
+    this._userPausedMusic = false;
+    this._musicListeners = new Set();
 
-    // Auto-unlock Web Audio on first user gesture
-    const unlockAudio = () => {
-      this.init();
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('touchstart', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
+    const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
+    this.musicState = {
+      currentTrackIndex: defaultIdx,
+      track: this.playlist[defaultIdx] || null,
+      isPlaying: false,
+      availability: 'unknown', // 'unknown' | 'checking' | 'available' | 'missing'
+      missingFilename: '',
+      currentTime: 0,
+      duration: 0,
+      volume: 0.78,
+      isMuted: false
     };
 
-    window.addEventListener('click', unlockAudio);
-    window.addEventListener('touchstart', unlockAudio);
-    window.addEventListener('keydown', unlockAudio);
+    if (typeof window !== 'undefined') {
+      try {
+        this.isMuted = localStorage.getItem('wedding_game_muted') === 'true';
+        this.musicState.isMuted = this.isMuted;
+      } catch (e) {}
 
-    // Global game event listeners
-    window.addEventListener('player-step', () => this.playFootstep());
-    window.addEventListener('player-jump', () => this.playJump());
-    window.addEventListener('player-interact', () => this.playChime(587.33));
-    window.addEventListener('modal-open', () => this.playModalChord());
+      this._initSharedBgmElement();
+
+      // Auto-unlock Web Audio on first user gesture
+      const unlockAudio = () => {
+        this.init();
+        window.removeEventListener('click', unlockAudio);
+        window.removeEventListener('touchstart', unlockAudio);
+        window.removeEventListener('keydown', unlockAudio);
+      };
+
+      window.addEventListener('click', unlockAudio);
+      window.addEventListener('touchstart', unlockAudio);
+      window.addEventListener('keydown', unlockAudio);
+
+      // Global game event listeners
+      window.addEventListener('player-step', () => this.playFootstep());
+      window.addEventListener('player-jump', () => this.playJump());
+      window.addEventListener('player-interact', () => this.playChime(587.33));
+      window.addEventListener('modal-open', () => this.playModalChord());
+    }
+  }
+
+  _initSharedBgmElement() {
+    if (typeof Audio === 'undefined') return;
+    const audio = new Audio();
+    audio.preload = 'metadata';
+    audio.volume = this.musicState.volume;
+    audio.muted = this.isMuted;
+
+    audio.addEventListener('loadedmetadata', () => {
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        this.musicState.duration = audio.duration;
+        this.musicState.availability = 'available';
+        this.musicState.missingFilename = '';
+        this._emitMusicUpdate();
+      }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      this.musicState.currentTime = Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
+      if (Number.isFinite(audio.duration) && audio.duration > 0) {
+        this.musicState.duration = audio.duration;
+      }
+      this._emitMusicUpdate();
+    });
+
+    audio.addEventListener('play', () => {
+      this.musicState.isPlaying = true;
+      this.musicState.availability = 'available';
+      this._emitMusicUpdate();
+    });
+
+    audio.addEventListener('pause', () => {
+      this.musicState.isPlaying = false;
+      this._emitMusicUpdate();
+    });
+
+    audio.addEventListener('ended', () => {
+      this.nextTrack({ autoPlay: true });
+    });
+
+    audio.addEventListener('error', () => {
+      const track = this.musicState.track;
+      const missingName = getTrackFilename(track);
+      if (track && track.audioUrl) {
+        this.availabilityCache.set(track.audioUrl, false);
+      }
+      this.musicState.isPlaying = false;
+      this.musicState.availability = 'missing';
+      this.musicState.missingFilename = missingName;
+      this._emitMusicUpdate();
+    });
+
+    this.bgmAudio = audio;
+  }
+
+  _emitMusicUpdate() {
+    const snapshot = this.getMusicState();
+    this._musicListeners.forEach((cb) => {
+      try {
+        cb(snapshot);
+      } catch (e) {}
+    });
+  }
+
+  getMusicState() {
+    return {
+      ...this.musicState,
+      isMuted: this.isMuted,
+      playlist: this.playlist
+    };
+  }
+
+  subscribeMusic(cb) {
+    if (typeof cb !== 'function') return () => {};
+    this._musicListeners.add(cb);
+    cb(this.getMusicState());
+    return () => {
+      this._musicListeners.delete(cb);
+    };
+  }
+
+  async _probeTrackUrl(url, filename = '') {
+    if (!url || typeof fetch !== 'function') return false;
+    if (this.availabilityCache.has(url)) {
+      return this.availabilityCache.get(url);
+    }
+    try {
+      const status = await fetchAssetStatus();
+      const fname = filename || String(url).split('/').pop() || '';
+      if (status && status.audio && status.audio.tracks && fname in status.audio.tracks) {
+        const ok = Boolean(status.audio.tracks[fname]);
+        this.availabilityCache.set(url, ok);
+        return ok;
+      }
+      const resp = await fetch(url, { method: 'HEAD' });
+      const ok = Boolean(resp && resp.ok);
+      this.availabilityCache.set(url, ok);
+      return ok;
+    } catch {
+      this.availabilityCache.set(url, false);
+      return false;
+    }
+  }
+
+  /**
+   * Called strictly inside a valid user interaction gesture (Cover envelope open / enter CTA).
+   * Starts default track 0 (Langit Merah Muda — Afgan) seamlessly once without overriding user pause.
+   */
+  async ensureOpeningTrackPlaying() {
+    this.init();
+    if (this._hasAttemptedOpeningBgm || this._userPausedMusic) return;
+    if (this.musicState.isPlaying) {
+      this._hasAttemptedOpeningBgm = true;
+      return;
+    }
+    this._hasAttemptedOpeningBgm = true;
+    const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
+    await this.selectTrack(defaultIdx, { autoPlay: true, restartIfSame: false });
+  }
+
+  /**
+   * Called when Listening Station modal opens.
+   * Preserves ongoing playback seamlessly and never restarts Langit Merah Muda if already playing.
+   */
+  async syncOnListeningStationOpen() {
+    if (this.musicState.availability === 'unknown') {
+      await this.selectTrack(this.musicState.currentTrackIndex, {
+        autoPlay: false,
+        restartIfSame: false
+      });
+    } else {
+      this._emitMusicUpdate();
+    }
+  }
+
+  async selectTrack(index, { autoPlay = true, restartIfSame = false } = {}) {
+    if (!this.playlist.length) return;
+    const targetIdx = ((index % this.playlist.length) + this.playlist.length) % this.playlist.length;
+    const track = this.playlist[targetIdx];
+    const hasLoadedSource = Boolean(this.bgmAudio && this.bgmAudio.getAttribute('src'));
+
+    if (
+      shouldPreservePlaybackOnSelect({
+        currentIndex: this.musicState.currentTrackIndex,
+        targetIndex: targetIdx,
+        restartIfSame,
+        hasLoadedSource,
+        availability: this.musicState.availability
+      })
+    ) {
+      if (autoPlay && this.bgmAudio && this.bgmAudio.paused && this.musicState.availability === 'available') {
+        this._userPausedMusic = false;
+        try {
+          await this.bgmAudio.play();
+        } catch {}
+      }
+      this._emitMusicUpdate();
+      return;
+    }
+
+    const token = ++this._bgmProbeToken;
+    this.musicState.currentTrackIndex = targetIdx;
+    this.musicState.track = track;
+    this.musicState.currentTime = 0;
+    this.musicState.duration = 0;
+    this.musicState.availability = 'checking';
+    this.musicState.missingFilename = getTrackFilename(track);
+
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+    }
+    this.musicState.isPlaying = false;
+    this._emitMusicUpdate();
+
+    if (!track || !track.audioUrl) {
+      this.musicState.availability = 'missing';
+      this._emitMusicUpdate();
+      return;
+    }
+
+    const available = await this._probeTrackUrl(track.audioUrl);
+    if (token !== this._bgmProbeToken) return;
+
+    if (!available) {
+      this.musicState.availability = 'missing';
+      this.musicState.missingFilename = getTrackFilename(track);
+      this._emitMusicUpdate();
+      return;
+    }
+
+    this.musicState.availability = 'available';
+    this.musicState.missingFilename = '';
+
+    if (this.bgmAudio) {
+      if (this.bgmAudio.getAttribute('src') !== track.audioUrl) {
+        this.bgmAudio.src = track.audioUrl;
+      } else if (restartIfSame) {
+        this.bgmAudio.currentTime = 0;
+      }
+      this.bgmAudio.muted = this.isMuted;
+
+      if (autoPlay) {
+        this._userPausedMusic = false;
+        try {
+          await this.bgmAudio.play();
+        } catch {
+          // Browser blocked playback or decode error
+        }
+      }
+    }
+
+    this._emitMusicUpdate();
+  }
+
+  async togglePlayPause() {
+    if (!this.bgmAudio) return false;
+    if (this.musicState.availability === 'unknown') {
+      await this.selectTrack(this.musicState.currentTrackIndex, { autoPlay: true });
+      return this.musicState.isPlaying;
+    }
+    if (this.musicState.availability !== 'available') {
+      return false;
+    }
+
+    if (!this.bgmAudio.paused) {
+      this._userPausedMusic = true;
+      this.bgmAudio.pause();
+      return false;
+    }
+
+    this._userPausedMusic = false;
+    try {
+      await this.bgmAudio.play();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  nextTrack({ autoPlay = true } = {}) {
+    return this.selectTrack(this.musicState.currentTrackIndex + 1, {
+      autoPlay,
+      restartIfSame: true
+    });
+  }
+
+  prevTrack({ autoPlay = true } = {}) {
+    return this.selectTrack(this.musicState.currentTrackIndex - 1, {
+      autoPlay,
+      restartIfSame: true
+    });
+  }
+
+  seekMusic(seconds) {
+    if (!this.bgmAudio || this.musicState.availability !== 'available') return;
+    if (!Number.isFinite(this.bgmAudio.duration) || this.bgmAudio.duration <= 0) return;
+    const clamped = Math.max(0, Math.min(this.bgmAudio.duration, Number(seconds) || 0));
+    this.bgmAudio.currentTime = clamped;
+    this.musicState.currentTime = clamped;
+    this._emitMusicUpdate();
+  }
+
+  setMusicVolume(volume) {
+    const clamped = Math.max(0, Math.min(1, Number(volume)));
+    this.musicState.volume = Number.isFinite(clamped) ? clamped : 0.78;
+    if (this.bgmAudio) {
+      this.bgmAudio.volume = this.musicState.volume;
+    }
+    this._emitMusicUpdate();
   }
 
   init() {
-    if (this.isInitialized) return;
+    if (this.isInitialized || typeof window === 'undefined') return;
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -73,15 +387,28 @@ class AudioSystem {
 
   toggleMute() {
     this.isMuted = !this.isMuted;
-    try {
-      localStorage.setItem('wedding_game_muted', String(this.isMuted));
-    } catch (e) {}
+    this.musicState.isMuted = this.isMuted;
+
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('wedding_game_muted', String(this.isMuted));
+      } catch (e) {}
+    }
+
+    if (this.bgmAudio) {
+      this.bgmAudio.muted = this.isMuted;
+    }
 
     if (this.masterGain && this.ctx) {
       const now = this.ctx.currentTime;
       this.masterGain.gain.cancelScheduledValues(now);
       this.masterGain.gain.linearRampToValueAtTime(this.isMuted ? 0 : 0.65, now + 0.1);
     }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('audio-mute-changed', { detail: { isMuted: this.isMuted } }));
+    }
+    this._emitMusicUpdate();
     return this.isMuted;
   }
 
@@ -106,7 +433,7 @@ class AudioSystem {
       filter.frequency.setValueAtTime(280, this.ctx.currentTime);
 
       const windGain = this.ctx.createGain();
-      windGain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+      windGain.gain.setValueAtTime(0.05, this.ctx.currentTime);
 
       whiteNoise.connect(filter);
       filter.connect(windGain);
@@ -114,31 +441,31 @@ class AudioSystem {
       whiteNoise.start();
     } catch (e) {}
 
-    // 2. Periodic Soft Indonesian Twilight Pentatonic Chords (Pelog Scale)
-    // Frequencies: 329.63Hz (E4), 392.00Hz (G4), 440.00Hz (A4), 523.25Hz (C5), 659.25Hz (E5)
+    // 2. Soft Twilight Pentatonic Chords (ONLY when real MP3 music track is NOT playing)
     const chords = [
-      [329.63, 440.00, 659.25], // E - A - E
-      [392.00, 523.25, 783.99], // G - C - G
-      [440.00, 523.25, 659.25], // A - C - E
-      [329.63, 392.00, 587.33]  // E - G - D
+      [329.63, 440.00, 659.25],
+      [392.00, 523.25, 783.99],
+      [440.00, 523.25, 659.25],
+      [329.63, 392.00, 587.33]
     ];
 
     let chordIdx = 0;
     const playNextChord = () => {
-      if (this.isMuted || !this.ctx || this.ctx.state !== 'running') return;
+      if (this.isMuted || this.musicState.isPlaying || !this.ctx || this.ctx.state !== 'running') return;
       const notes = chords[chordIdx % chords.length];
       chordIdx++;
 
       notes.forEach((freq, idx) => {
         setTimeout(() => {
-          this.playBellTone(freq, 2.8, 0.08);
+          if (!this.musicState.isPlaying && !this.isMuted) {
+            this.playBellTone(freq, 2.8, 0.06);
+          }
         }, idx * 220);
       });
     };
 
-    // Play first chord after 1.5s, then every 7 seconds
-    setTimeout(playNextChord, 1500);
-    this.ambientInterval = setInterval(playNextChord, 7200);
+    setTimeout(playNextChord, 2200);
+    this.ambientInterval = setInterval(playNextChord, 7800);
   }
 
   playBellTone(freq, duration = 2.0, maxVol = 0.1) {
@@ -151,7 +478,6 @@ class AudioSystem {
       osc.type = 'sine';
       osc.frequency.setValueAtTime(freq, now);
 
-      // Bell envelope (quick attack, gentle exponential decay)
       gain.gain.setValueAtTime(0.001, now);
       gain.gain.linearRampToValueAtTime(maxVol, now + 0.04);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
@@ -167,7 +493,7 @@ class AudioSystem {
   playFootstep() {
     if (this.isMuted || !this.ctx || !this.sfxGain) return;
     const now = performance.now();
-    if (now - this.lastFootstepTime < 240) return; // Stride debounce
+    if (now - this.lastFootstepTime < 240) return;
     this.lastFootstepTime = now;
 
     try {
@@ -176,7 +502,6 @@ class AudioSystem {
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
 
-      // Soft stone foot tap
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(110 + Math.random() * 25, t);
 
@@ -247,6 +572,11 @@ class AudioSystem {
 
   destroy() {
     if (this.ambientInterval) clearInterval(this.ambientInterval);
+    if (this.bgmAudio) {
+      try {
+        this.bgmAudio.pause();
+      } catch {}
+    }
     if (this.ctx) {
       try {
         this.ctx.close();
@@ -257,3 +587,4 @@ class AudioSystem {
 }
 
 export const audioSystem = new AudioSystem();
+export { AudioSystem };

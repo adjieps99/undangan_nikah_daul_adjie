@@ -1,11 +1,14 @@
 import * as THREE from 'three';
+import { ASSET_MANIFEST } from '../../config/assetManifest.js';
 
 export class PhotoGallery {
   constructor() {
     this.group = new THREE.Group();
     this.group.position.set(18, 2.0, 8);
     this.group.rotation.y = -Math.PI / 2;
+    this.frameMeshes = [];
     this.buildGallery();
+    this.loadRealGalleryThumbnails();
   }
 
   buildGallery() {
@@ -29,20 +32,22 @@ export class PhotoGallery {
     wallCap.position.set(0, 3.35, -1.2);
     this.group.add(wallCap);
 
-    // 3. 3 Ornate Framed Photos along Wall
+    // 3. 3 Ornate Framed Canvases along Wall
     const photoOffsets = [-2.4, 0, 2.4];
     const photoColors = ['#ff9a9e', '#a1c4fd', '#fbc2eb'];
 
     photoOffsets.forEach((px, i) => {
-      // Golden Picture Frame
       const frame = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.3, 0.08), frameMat);
       frame.position.set(px, 1.8, -1.0);
       this.group.add(frame);
 
-      // Artwork Canvas
-      const canvas = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.1), new THREE.MeshLambertMaterial({ color: photoColors[i] }));
+      const canvas = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.4, 1.1),
+        new THREE.MeshLambertMaterial({ color: photoColors[i] })
+      );
       canvas.position.set(px, 1.8, -0.95);
       this.group.add(canvas);
+      this.frameMeshes.push(canvas);
 
       // Dedicated Overhead Gallery Spotlight
       const spot = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.25, 8), woodMat);
@@ -72,5 +77,25 @@ export class PhotoGallery {
       blm.position.set(f, 0.95, 1.4);
       this.group.add(blm);
     }
+  }
+
+  loadRealGalleryThumbnails() {
+    if (typeof fetch !== 'function') return;
+    fetch(ASSET_MANIFEST.images.gallery.apiEndpoint)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data || !Array.isArray(data.photos) || data.photos.length === 0) return;
+        const loader = new THREE.TextureLoader();
+        data.photos.slice(0, this.frameMeshes.length).forEach((photo, idx) => {
+          loader.load(photo.url, (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            const targetMesh = this.frameMeshes[idx];
+            if (!targetMesh) return;
+            targetMesh.material?.dispose?.();
+            targetMesh.material = new THREE.MeshLambertMaterial({ map: tex, color: '#ffffff' });
+          });
+        });
+      })
+      .catch(() => {});
   }
 }

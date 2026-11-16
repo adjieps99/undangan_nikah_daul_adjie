@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { TextureFactory } from '../three/TextureFactory.js';
 import { TerrainManager } from './TerrainManager.js';
+import { isVegetationSpotClear } from './GardenClearance.js';
 import { GardenEntrance } from './landmarks/GardenEntrance.js';
 import { CoupleProfilePavilion } from './landmarks/CoupleProfilePavilion.js';
 import { PhotoGallery } from './landmarks/PhotoGallery.js';
@@ -8,29 +9,14 @@ import { ListeningStation } from './landmarks/ListeningStation.js';
 import { FoodCourt } from './landmarks/FoodCourt.js';
 import { HachiGardenRestaurant } from './landmarks/HachiGardenRestaurant.js';
 
-/**
- * HachiGarden3D - Phase 8: Cinematic Indonesian Dreamscape Refactor
- * Reconstructed 3D world matching the authoritative mockup and actual Hachi Garden references:
- * - Romantic peach & rose sunset sky dome with drifting clouds and 3D crescent moon
- * - Majestic distant Gunung Rinjani volcanic silhouette with atmospheric perspective
- * - Authentic 4-tier terraced tea plantation (terasering kebun teh) with deliberate curved rows
- * - Natural stone retaining walls and curved cobblestone walking pathways
- * - 6 Refined Landmarks:
- *    1. Garden Entrance (Landmark 1)
- *    2. Couple Profile Pavilion (Landmark 2)
- *    3. Photo Gallery (Landmark 3)
- *    4. Listening Station (Landmark 4)
- *    5. Food Court Favorit (Landmark 5)
- *    6. The Hachi Garden Restaurant (Landmark 6)
- * - 480 Instanced contoured tea bushes for 60 FPS mobile performance
- * - Flowering Tabebuia trees, warm pathway lanterns, and drifting blossom petals
- */
 export class HachiGarden3D {
   constructor(scene) {
     this.scene = scene;
     this.group = new THREE.Group();
     this.scene.add(this.group);
 
+    this.walkableMeshes = [];
+    this.cameraOccluders = [];
     this.petalsMesh = null;
     this.petalPositions = [];
     this.clouds = [];
@@ -49,24 +35,29 @@ export class HachiGarden3D {
     this.buildPathwayLanterns();
     this.buildListeningStationPathwayFeatures();
 
-    // 3. Cultural & Architectural Landmarks
+    // 3. Cultural & Architectural Landmarks (also registered for camera occlusion checks)
     this.gardenEntrance = new GardenEntrance(); // Landmark 1
     this.group.add(this.gardenEntrance.group);
+    this.cameraOccluders.push(this.gardenEntrance.group);
 
     this.coupleProfile = new CoupleProfilePavilion(); // Landmark 2
     this.group.add(this.coupleProfile.group);
+    this.cameraOccluders.push(this.coupleProfile.group);
 
     this.photoGallery = new PhotoGallery(); // Landmark 3
     this.group.add(this.photoGallery.group);
+    this.cameraOccluders.push(this.photoGallery.group);
 
     this.listeningStation = new ListeningStation(); // Landmark 4
     this.group.add(this.listeningStation.group);
 
     this.foodCourt = new FoodCourt(); // Landmark 5
     this.group.add(this.foodCourt.group);
+    this.cameraOccluders.push(this.foodCourt.group);
 
     this.hachiRestaurant = new HachiGardenRestaurant(); // Landmark 6
     this.group.add(this.hachiRestaurant.group);
+    this.cameraOccluders.push(this.hachiRestaurant.group);
 
     // 4. Floating Blossom Petal Particles
     this.buildFloatingPetalParticles();
@@ -229,7 +220,9 @@ export class HachiGarden3D {
     const baseGround = new THREE.Mesh(new THREE.PlaneGeometry(180, 180), teaGreenMat);
     baseGround.rotation.x = -Math.PI / 2;
     baseGround.position.set(0, -0.02, 0);
+    baseGround.userData.walkableSurface = true;
     this.group.add(baseGround);
+    this.walkableMeshes.push(baseGround);
 
     // Helper: Build an architectural retaining wall with protruding coping stone cap
     const addRetainingWall = (x, yBottom, yTop, z, length, isAlongX = true) => {
@@ -253,11 +246,13 @@ export class HachiGarden3D {
       this.group.add(capMesh);
     };
 
-    // Helper: Add plateau horizontal green lawn plate
+    // Helper: Add plateau horizontal green lawn plate (walkable ground mesh)
     const addPlateau = (x, y, z, width, length) => {
       const plate = new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, length), teaGreenMat);
       plate.position.set(x, y - 0.04, z);
+      plate.userData.walkableSurface = true;
       this.group.add(plate);
+      this.walkableMeshes.push(plate);
     };
 
     // Helper: Add sloped natural berm (earth embankment) flanking a terrace
@@ -276,7 +271,10 @@ export class HachiGarden3D {
     addPlateau(0, 0.0, 31, 32, 14);
 
     // --- Terrace 1: Central Garden & East Wing Plateau (y = 2.0, z: -6 to 18, x: -14 to 28) ---
-    addPlateau(7, 2.0, 6, 42, 24);
+    // Split western lip around Staircase 2 cutout (x in [-14, -8.5], z in [5.7, 10.3]) so steps are never buried
+    addPlateau(9.75, 2.0, 6.0, 36.5, 24.0);      // Main Terrace 1 (x: -8.5 to 28, z: -6 to 18)
+    addPlateau(-11.25, 2.0, -0.15, 5.5, 11.7);  // West lip North of Staircase 2 (z: -6 to 5.7)
+    addPlateau(-11.25, 2.0, 14.15, 5.5, 7.7);   // West lip South of Staircase 2 (z: 10.3 to 18)
     // Front Retaining Wall (z = 18.0, height = 2.0), split cleanly by Staircase 1 at x in [-3.2, 3.2]
     addRetainingWall(-8.6, 0.0, 2.0, 18.0, 10.8, true); // West section (x: -14 to -3.2)
     addRetainingWall(15.6, 0.0, 2.0, 18.0, 24.8, true); // East section (x: 3.2 to 28)
@@ -327,9 +325,11 @@ export class HachiGarden3D {
       const segGroup = new THREE.Group();
       segGroup.position.set(x, y + 0.02, z);
 
-      // Paving slab
+      // Paving slab (top sits at y + 0.04; register in walkableMeshes so raycast lands flush on top!)
       const paving = new THREE.Mesh(new THREE.BoxGeometry(widthInX, 0.04, lengthInZ), stonePathMat);
+      paving.userData.walkableSurface = true;
       segGroup.add(paving);
+      this.walkableMeshes.push(paving);
 
       if (curbSides === 'x') {
         const curbLeft = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.06, lengthInZ), curbStoneMat);
@@ -359,7 +359,9 @@ export class HachiGarden3D {
 
       const plazaGeo = new THREE.CylinderGeometry(radius, radius + 0.05, 0.04, segments);
       const plazaMesh = new THREE.Mesh(plazaGeo, stonePathMat);
+      plazaMesh.userData.walkableSurface = true;
       plazaGroup.add(plazaMesh);
+      this.walkableMeshes.push(plazaMesh);
 
       const ringGeo = new THREE.TorusGeometry(radius + 0.02, 0.06, 6, segments);
       const ringMesh = new THREE.Mesh(ringGeo, curbStoneMat);
@@ -368,6 +370,36 @@ export class HachiGarden3D {
       plazaGroup.add(ringMesh);
 
       this.group.add(plazaGroup);
+    };
+
+    // Invisible smooth inclined stair ramp collider mat for buttery-smooth raycast walking on staircases
+    const rampColliderMat = new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide });
+    const addStairRampCollider = ({ x1, y1, z1, x2, y2, z2, width }) => {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const dz = z2 - z1;
+      const horizLen = Math.hypot(dx, dz);
+      const rampLen = Math.hypot(horizLen, dy);
+      const slopeAngle = Math.atan2(dy, horizLen);
+      const isAlongX = Math.abs(dx) > Math.abs(dz);
+
+      const rampGeo = isAlongX
+        ? new THREE.PlaneGeometry(rampLen, width)
+        : new THREE.PlaneGeometry(width, rampLen);
+      rampGeo.rotateX(-Math.PI / 2);
+
+      const ramp = new THREE.Mesh(rampGeo, rampColliderMat);
+      ramp.position.set((x1 + x2) / 2, (y1 + y2) / 2 + 0.03, (z1 + z2) / 2);
+      if (isAlongX) {
+        // Ascending/descending along -X
+        ramp.rotation.z = dx < 0 ? -slopeAngle : slopeAngle;
+      } else {
+        // Ascending/descending along -Z
+        ramp.rotation.x = dz < 0 ? slopeAngle : -slopeAngle;
+      }
+      ramp.userData.walkableSurface = true;
+      this.group.add(ramp);
+      this.walkableMeshes.push(ramp);
     };
 
     // Helper: Add precision stone staircase matching TerrainManager math
@@ -382,7 +414,6 @@ export class HachiGarden3D {
         const sy = startY + s * dy;
         const sz = startZ + s * dz;
 
-        // Tread step slab with slight generous overlap (+0.08m) to eliminate any seams
         const treadW = isAlongX ? stepRun + 0.08 : width;
         const treadH = stepRise + 0.08;
         const treadL = isAlongX ? width : stepRun + 0.08;
@@ -391,9 +422,7 @@ export class HachiGarden3D {
         step.position.set(sx, sy, sz);
         this.group.add(step);
 
-        // Flanking solid stone retaining cheek parapets
         if (isAlongX) {
-          // Cheeks run along X, flanking North (-Z) and South (+Z)
           const cheekGeo = new THREE.BoxGeometry(stepRun + 0.10, stepRise + 0.24, cheekThickness);
           const cheekN = new THREE.Mesh(cheekGeo, curbStoneMat);
           cheekN.position.set(sx, sy + 0.09, sz - width / 2 - cheekThickness / 2);
@@ -403,7 +432,6 @@ export class HachiGarden3D {
           cheekS.position.set(sx, sy + 0.09, sz + width / 2 + cheekThickness / 2);
           this.group.add(cheekS);
         } else {
-          // Cheeks run along Z, flanking West (-X) and East (+X)
           const cheekGeo = new THREE.BoxGeometry(cheekThickness, stepRise + 0.24, stepRun + 0.10);
           const cheekW = new THREE.Mesh(cheekGeo, curbStoneMat);
           cheekW.position.set(sx - width / 2 - cheekThickness / 2, sy + 0.09, sz);
@@ -415,6 +443,12 @@ export class HachiGarden3D {
         }
       }
     };
+
+    // Smooth stair ramp colliders aligned cleanly with all 4 staircases
+    addStairRampCollider({ x1: 0, y1: 0.0, z1: 24.0, x2: 0, y2: 2.0, z2: 18.0, width: 6.2 });
+    addStairRampCollider({ x1: -8.5, y1: 2.0, z1: 8.0, x2: -14.0, y2: 1.0, z2: 8.0, width: 4.3 });
+    addStairRampCollider({ x1: -8.5, y1: 2.0, z1: -4.0, x2: -14.5, y2: 3.2, z2: -4.0, width: 4.3 });
+    addStairRampCollider({ x1: 0, y1: 2.0, z1: -6.0, x2: 0, y2: 5.0, z2: -14.0, width: 7.4 });
 
     // -------------------------------------------------------------
     // 1. PRIMARY ARTERY: ENTRANCE PROMENADE (y = 0.0, z: 24 to 32, x = 0)
@@ -445,12 +479,12 @@ export class HachiGarden3D {
     // West branch apron connecting Central Hub (x: -2.5) to Staircase 2 head (x: -8.5), z in [5.9, 10.1]
     addPathSegment(-5.5, 2.0, 8.0, 6.2, 4.2, 'z');
 
-    // Staircase 2: Connecting Central Garden (y = 2.0, x = -8.5) down to Music Terrace (y = 1.0, x = -13.5)
-    // 6 steps, dx = -0.833, dy = -0.166, dz = 0, width = 4.2
-    addStaircase(-8.5, 1.91, 8.0, 6, -0.833, -0.166, 0, 4.2);
+    // Staircase 2: Connecting Central Garden (y = 2.0, x = -8.5) down to Music Terrace (y = 1.0, x = -14.0)
+    // 6 steps spanning 5.5m cleanly with zero grass burial
+    addStaircase(-8.96, 1.917, 8.0, 6, -0.9167, -0.1667, 0, 4.2);
 
-    // Paved approach walkway from base of stairs (x = -13.5) extending generously into Music Plaza edge (to x = -19.2)
-    addPathSegment(-16.35, 1.0, 8.0, 5.8, 4.2, 'z');
+    // Paved approach walkway from base of stairs (x = -14.0) extending generously into Music Plaza edge (x = -19.2)
+    addPathSegment(-16.55, 1.0, 8.0, 5.3, 4.2, 'z');
 
     // Expansive 12m Diameter Music Lounge Plaza (centered at x = -24, z = 8, y = 1.0, radius 6.0m)
     addDestinationPlaza(-24.0, 1.0, 8.0, 6.0, 28);
@@ -465,8 +499,8 @@ export class HachiGarden3D {
     // 7 steps, dx = -0.857, dy = 0.171, dz = 0, width = 4.2
     addStaircase(-8.5, 2.18, -4.0, 7, -0.857, 0.171, 0, 4.2);
 
-    // Architectural Landing Platform (Bordes) at top of Staircase 3 with stone pavement
-    addDestinationPlaza(-15.5, 3.2, -4.0, 3.4, 16);
+    // Architectural Landing Platform (Bordes) flush at top of Staircase 3 (x: -14.2 to -17.5)
+    addPathSegment(-15.85, 3.2, -4.0, 3.3, 4.4, 'z');
     addPathSegment(-16.5, 3.2, -4.0, 4.8, 4.4, 'z');
     addPathSegment(-18.5, 3.2, -7.5, 4.4, 7.6, 'x');
 
@@ -511,12 +545,12 @@ export class HachiGarden3D {
   }
 
   buildInstancedTeaBushes() {
-    // 480 Contoured tea bushes arranged in agricultural terraces with generous setbacks (> 3m) from all pathways
+    // Rule-driven contoured tea bushes placed strictly inside agricultural terraces with landmark/path clearance
     const bushCount = 480;
     const teaFoliageTex = TextureFactory.createTeaFoliageTexture(256);
 
-    const bushGeo = new THREE.CylinderGeometry(1.2, 0.80, 0.70, 10);
-    bushGeo.scale(1.15, 0.95, 1.05);
+    const bushGeo = new THREE.CylinderGeometry(1.15, 0.78, 0.70, 10);
+    bushGeo.scale(1.12, 0.95, 1.04);
 
     const teaBushMat = new THREE.MeshLambertMaterial({
       map: teaFoliageTex,
@@ -527,67 +561,72 @@ export class HachiGarden3D {
     const dummy = new THREE.Object3D();
     let idx = 0;
 
-    const addBushRow = (startX, startZ, endX, endZ, yElevation, count, variation = 0.5) => {
+    // Deterministic pseudo-random helper so garden composition is identical across loads
+    const pseudo = (seed) => {
+      const s = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    const tryPlaceBush = (bx, bz, yOverride = null, seed = idx + 1) => {
+      if (idx >= bushCount) return false;
+      if (!isVegetationSpotClear(bx, bz, 1.35)) return false;
+
+      const groundY = yOverride !== null ? yOverride : TerrainManager.getHeight(bx, bz);
+      dummy.position.set(bx, groundY + 0.36, bz);
+      const scale = 0.92 + pseudo(seed) * 0.28;
+      dummy.scale.set(scale, scale * (0.85 + pseudo(seed + 19) * 0.18), scale);
+      dummy.rotation.y = pseudo(seed + 41) * Math.PI * 2;
+      dummy.updateMatrix();
+      instancedBushes.setMatrixAt(idx++, dummy.matrix);
+      return true;
+    };
+
+    const addBushRow = (startX, startZ, endX, endZ, yElevation, count, variation = 0.45) => {
       for (let i = 0; i < count && idx < bushCount; i++) {
-        const t = i / (count - 1);
-        const bx = startX + (endX - startX) * t + (Math.sin(t * Math.PI * 2) * variation);
-        const bz = startZ + (endZ - startZ) * t + (Math.cos(t * Math.PI) * variation);
-        const by = yElevation + 0.40;
-
-        dummy.position.set(bx, by, bz);
-        const scale = 0.95 + Math.random() * 0.30;
-        dummy.scale.set(scale, scale * (0.85 + Math.random() * 0.20), scale);
-        dummy.rotation.y = Math.random() * Math.PI;
-        dummy.updateMatrix();
-
-        instancedBushes.setMatrixAt(idx++, dummy.matrix);
+        const t = count > 1 ? i / (count - 1) : 0;
+        const bx = startX + (endX - startX) * t + Math.sin(t * Math.PI * 2) * variation;
+        const bz = startZ + (endZ - startZ) * t + Math.cos(t * Math.PI) * variation;
+        tryPlaceBush(bx, bz, yElevation, i + count * 17 + startX + startZ);
       }
     };
 
-    // Plantation Rows (Strictly outside pathways):
     // 1. Entrance / Lower Foreground Rows (flanking gate, z: 28 to 36)
-    addBushRow(-30, 32, -10, 32, 0.0, 14, 0.8);
-    addBushRow(10, 32, 30, 32, 0.0, 14, 0.8);
-    addBushRow(-32, 35, -12, 35, 0.0, 14, 0.6);
-    addBushRow(12, 35, 32, 35, 0.0, 14, 0.6);
+    addBushRow(-32, 31, -10.5, 31, 0.0, 14, 0.55);
+    addBushRow(10.5, 31, 32, 31, 0.0, 14, 0.55);
+    addBushRow(-34, 35, -11.5, 35, 0.0, 14, 0.45);
+    addBushRow(11.5, 35, 34, 35, 0.0, 14, 0.45);
 
-    // 2. Hillside Buffer between Music Area and Food Court (z: -2 to 2, x: -34 to -14)
-    addBushRow(-34, 0, -16, 0, 1.8, 14, 0.6);
-    addBushRow(-34, -2, -16, -2, 2.4, 14, 0.5);
+    // 2. Hillside Buffer between Music Area and Food Court (z: -1.5 to 1.8, x: -34 to -15.5)
+    addBushRow(-34, 0.8, -16.5, 0.8, 1.0, 12, 0.4);
+    addBushRow(-34, -0.8, -16.5, -0.8, 1.8, 12, 0.35);
 
-    // 3. Central Garden Side Terraces (flanking main walkway, clear of center x in [-5, 5])
-    addBushRow(-12, 14, -6, 14, 2.0, 8, 0.4);
-    addBushRow(6, 14, 24, 14, 2.0, 14, 0.6);
-    addBushRow(-12, 2, -6, 2, 2.0, 8, 0.4);
-    addBushRow(6, 2, 24, 2, 2.0, 14, 0.6);
+    // 3. Central Garden Side Terraces (flanking main walkways cleanly)
+    addBushRow(-12.5, 14.5, -6.2, 14.5, 2.0, 6, 0.3);
+    addBushRow(6.2, 14.5, 25.0, 14.5, 2.0, 13, 0.45);
+    addBushRow(-12.5, 1.5, -6.2, 1.5, 2.0, 6, 0.3);
+    addBushRow(6.2, 1.5, 25.0, 1.5, 2.0, 13, 0.45);
 
-    // 4. North Slopes Flanking Grand Staircase (clear of stairs x in [-5, 5] and Food Court corridor x in [-29, -14])
-    // 4a. Western outer embankment (behind/west of Food Court)
-    addBushRow(-36, -8, -30, -8, 3.2, 6, 0.3);
-    addBushRow(-36, -12, -30, -12, 4.0, 6, 0.3);
+    // 4. North Slopes Flanking Grand Staircase
+    addBushRow(-35.5, -7.5, -33.2, -7.5, 3.2, 4, 0.2);
+    addBushRow(-35.5, -12.5, -33.2, -12.5, 3.2, 4, 0.2);
+    addBushRow(-12.2, -8.5, -6.2, -8.5, 2.0, 5, 0.25);
+    addBushRow(-12.2, -11.8, -6.2, -11.8, 2.0, 5, 0.25);
+    addBushRow(7.0, -11.5, 26.0, -11.5, 2.0, 13, 0.45);
 
-    // 4b. Hillside terrace between Food Court wall (x = -14) and Grand Staircase (x = -5)
-    addBushRow(-13.5, -8, -5.5, -8, 2.8, 8, 0.3);
-    addBushRow(-13.5, -12, -5.5, -12, 4.0, 8, 0.3);
-
-    // 4c. Eastern slope (mirroring east of Grand Staircase)
-    addBushRow(8, -8, 32, -8, 2.0, 16, 0.8);
-    addBushRow(8, -12, 32, -12, 3.5, 16, 0.8);
-
-    // 5. Outer Venue Perimeter Rows (z: -30 to -34)
-    addBushRow(-36, -32, -16, -32, 5.0, 14, 0.8);
-    addBushRow(16, -32, 36, -32, 5.0, 14, 0.8);
-
-    // Fill remaining slots along outer world edges
-    while (idx < bushCount) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 36 + Math.random() * 10;
-      dummy.position.set(Math.cos(angle) * dist, 0.55, Math.sin(angle) * dist);
-      dummy.scale.set(0.95, 0.85, 0.95);
-      dummy.updateMatrix();
-      instancedBushes.setMatrixAt(idx++, dummy.matrix);
+    // 5. Outer Venue Perimeter Hillsides (deterministically gridded outside all pathways & landmarks)
+    for (let x = -40; x <= 40; x += 3.2) {
+      for (let z = -38; z <= 38; z += 3.4) {
+        if (idx >= bushCount) break;
+        const onOuterSlope = Math.abs(x) >= 29 || z <= -34.5 || (z >= 19.5 && Math.abs(x) >= 11.5);
+        if (!onOuterSlope) continue;
+        const jitterX = (pseudo(x * 7 + z * 13) - 0.5) * 1.1;
+        const jitterZ = (pseudo(x * 19 + z * 5) - 0.5) * 1.1;
+        tryPlaceBush(x + jitterX, z + jitterZ, null, x * 31 + z * 17);
+      }
     }
 
+    // Strictly hide any remaining unfilled buffer slots so zero phantom bushes sit at origin (0,0,0)
+    instancedBushes.count = idx;
     instancedBushes.instanceMatrix.needsUpdate = true;
     this.group.add(instancedBushes);
   }
@@ -777,28 +816,26 @@ export class HachiGarden3D {
       this.group.add(shrub);
     };
 
-    // 1. Flowering Shrubs along Pathway Edges (North flank z = 5.6, South flank z = 10.4)
-    // Upper tier (y = 2.0, x: -3.5 to -8.0)
-    createFloweringShrub(-4.0, 2.0, 5.5, 'hydrangea', 0.95);
-    createFloweringShrub(-6.0, 2.0, 5.4, 'azalea', 1.05);
-    createFloweringShrub(-7.8, 2.0, 5.5, 'lavender', 0.9);
-    createFloweringShrub(-4.0, 2.0, 10.5, 'azalea', 1.0);
-    createFloweringShrub(-6.0, 2.0, 10.6, 'hydrangea', 1.1);
-    createFloweringShrub(-7.8, 2.0, 10.5, 'lavender', 0.95);
+    // 1. Flowering Shrubs cleanly outside stone curbs (North flank z <= 5.2, South flank z >= 10.8)
+    createFloweringShrub(-4.0, 2.0, 5.2, 'hydrangea', 0.95);
+    createFloweringShrub(-6.0, 2.0, 5.1, 'azalea', 1.05);
+    createFloweringShrub(-7.8, 2.0, 5.2, 'lavender', 0.9);
+    createFloweringShrub(-4.0, 2.0, 10.8, 'azalea', 1.0);
+    createFloweringShrub(-6.0, 2.0, 10.9, 'hydrangea', 1.1);
+    createFloweringShrub(-7.8, 2.0, 10.8, 'lavender', 0.95);
 
-    // Lower tier along approach corridor (y = 1.0, x: -14.0 to -19.0)
-    createFloweringShrub(-14.5, 1.0, 5.5, 'lavender', 1.0);
-    createFloweringShrub(-16.2, 1.0, 5.4, 'hydrangea', 1.15);
-    createFloweringShrub(-18.0, 1.0, 5.5, 'azalea', 1.05);
-    createFloweringShrub(-14.5, 1.0, 10.5, 'hydrangea', 0.95);
-    createFloweringShrub(-16.2, 1.0, 10.6, 'azalea', 1.1);
-    createFloweringShrub(-18.0, 1.0, 10.5, 'lavender', 1.0);
+    createFloweringShrub(-14.6, 1.0, 5.2, 'lavender', 1.0);
+    createFloweringShrub(-16.2, 1.0, 5.1, 'hydrangea', 1.15);
+    createFloweringShrub(-17.8, 1.0, 5.2, 'azalea', 1.05);
+    createFloweringShrub(-14.6, 1.0, 10.8, 'hydrangea', 0.95);
+    createFloweringShrub(-16.2, 1.0, 10.9, 'azalea', 1.1);
+    createFloweringShrub(-17.8, 1.0, 10.8, 'lavender', 1.0);
 
-    // Flanking the Listening Station Plaza entrance (x = -19.5 to -24.0)
-    createFloweringShrub(-20.2, 1.0, 4.2, 'hydrangea', 1.2);
-    createFloweringShrub(-21.8, 1.0, 3.4, 'azalea', 1.1);
-    createFloweringShrub(-20.2, 1.0, 11.8, 'azalea', 1.2);
-    createFloweringShrub(-21.8, 1.0, 12.6, 'hydrangea', 1.1);
+    // Flanking the Listening Station Plaza outside the circular stone rim (radius 6.0m around (-24, 8))
+    createFloweringShrub(-19.2, 1.0, 3.0, 'hydrangea', 1.1);
+    createFloweringShrub(-21.0, 1.0, 1.8, 'azalea', 1.05);
+    createFloweringShrub(-19.2, 1.0, 13.0, 'azalea', 1.1);
+    createFloweringShrub(-21.0, 1.0, 14.2, 'hydrangea', 1.05);
 
     // 2. Continuous Raised Stone Curbs flanking the Walkway
     const addCurbBorder = (startX, endX, z, y) => {
@@ -811,8 +848,8 @@ export class HachiGarden3D {
 
     addCurbBorder(-2.5, -8.3, 5.9, 2.0);
     addCurbBorder(-2.5, -8.3, 10.1, 2.0);
-    addCurbBorder(-13.7, -19.2, 5.9, 1.0);
-    addCurbBorder(-13.7, -19.2, 10.1, 1.0);
+    addCurbBorder(-14.0, -19.2, 5.9, 1.0);
+    addCurbBorder(-14.0, -19.2, 10.1, 1.0);
 
     // 3. Organic Flagstone Stepping Stones Flanking the Approach
     const stepMat = new THREE.MeshLambertMaterial({ color: '#b8ab96' });
@@ -833,33 +870,49 @@ export class HachiGarden3D {
     });
 
     // 4. Directional Carved Wooden Signpost at Central Junction
-    // Junction corner: x = -3.2, y = 2.0, z = 5.2
     const signpost = new THREE.Group();
     signpost.position.set(-3.2, 2.0, 5.2);
 
-    // Vertical wooden post
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.2, 8), woodPostMat);
     post.position.y = 1.1;
     signpost.add(post);
 
-    // Cross directional arm pointing West towards Listening Station
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.28, 0.08), woodBoardMat);
-    arm.position.set(-0.35, 1.85, 0);
+    // Crisp CanvasTexture wooden plank reading "LISTENING STATION" on front & back
+    const signCanvas = document.createElement('canvas');
+    signCanvas.width = 512;
+    signCanvas.height = 128;
+    const sctx = signCanvas.getContext('2d');
+    sctx.fillStyle = '#5f3b1e';
+    sctx.fillRect(0, 0, 512, 128);
+    sctx.strokeStyle = '#d4af37';
+    sctx.lineWidth = 6;
+    sctx.strokeRect(8, 8, 496, 112);
+    sctx.fillStyle = '#ffe9a8';
+    sctx.font = 'bold 34px Georgia, serif';
+    sctx.textAlign = 'center';
+    sctx.textBaseline = 'middle';
+    sctx.fillText('← LISTENING STATION', 256, 66);
+
+    const signTex = new THREE.CanvasTexture(signCanvas);
+    signTex.colorSpace = THREE.SRGBColorSpace;
+    const signPlankMat = new THREE.MeshLambertMaterial({ map: signTex });
+    const armMaterials = [woodBoardMat, woodBoardMat, woodBoardMat, woodBoardMat, signPlankMat, signPlankMat];
+
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.36, 0.09), armMaterials);
+    arm.position.set(-0.48, 1.85, 0);
     signpost.add(arm);
 
-    // Pointed arrow tip on the West end
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.20, 0.32, 4), woodBoardMat);
-    tip.position.set(-1.05, 1.85, 0);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.32, 4), woodBoardMat);
+    tip.position.set(-1.38, 1.85, 0);
     tip.rotation.z = Math.PI / 2;
     signpost.add(tip);
 
-    // Amber lantern hanging from signpost arm
     const lampChain = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.24, 4), curbMat);
-    lampChain.position.set(-0.7, 1.58, 0);
+    lampChain.position.set(-0.95, 1.56, 0);
     signpost.add(lampChain);
 
     const miniLamp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.26, 0.22), amberGlowMat);
-    miniLamp.position.set(-0.7, 1.34, 0);
+    miniLamp.position.set(-0.95, 1.32, 0);
     signpost.add(miniLamp);
 
     this.group.add(signpost);

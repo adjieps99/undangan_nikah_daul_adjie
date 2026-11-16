@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { Avatar3D } from '../characters/Avatar3D.js';
+import { CHARACTER_ANIM_STATES } from '../characters/CharacterAnimator.js';
+import { computeSeatingRigPose } from '../characters/SeatingAnchor.js';
 import { gameState } from '../state/GameState.js';
 import { TerrainManager } from '../world/TerrainManager.js';
 
@@ -18,9 +20,20 @@ export class CharacterController {
     this.jumpCooldown = 0;
     this.isSitting = false;
 
-    // Load Avatar3D
+    // Filtered downward terrain raycasting
+    this.walkableMeshes = [];
+    this._groundRaycaster = new THREE.Raycaster();
+    this._groundRayOrigin = new THREE.Vector3();
+    this._groundRayDown = new THREE.Vector3(0, -1, 0);
+
+    // Animation transition helpers
+    this._lastTurnDelta = 0;
+    this._lastTurnDir = 0;
+    this._standingSettleTimer = 0;
+
+    // Load Avatar3D (procedural + optional rigged GLB)
     const config = gameState.getState().playerConfig;
-    this.avatar = new Avatar3D(config);
+    this.avatar = new Avatar3D(config, { role: 'guest' });
     this.mesh = this.avatar.group;
     // Initial spawn based on lastOutdoorPosition, URL parameter, or default Pintu Masuk
     const savedOutdoor = gameState.getState().lastOutdoorPosition;
@@ -32,7 +45,7 @@ export class CharacterController {
     this.cachedConfigStr = JSON.stringify(config);
 
     // Subscribe to avatar changes
-    gameState.subscribe((state) => {
+    this._unsubscribeState = gameState.subscribe((state) => {
       const newConfigStr = JSON.stringify(state.playerConfig);
       if (newConfigStr !== this.cachedConfigStr) {
         this.cachedConfigStr = newConfigStr;
@@ -40,16 +53,37 @@ export class CharacterController {
         const currentRot = this.mesh ? this.mesh.rotation.y : 0;
 
         this.scene.remove(this.mesh);
-        this.avatar = new Avatar3D(state.playerConfig);
+        if (this.avatar && typeof this.avatar.dispose === 'function') {
+          this.avatar.dispose();
+        }
+        this.avatar = new Avatar3D(state.playerConfig, { role: 'guest' });
         this.mesh = this.avatar.group;
         this.mesh.position.copy(currentPos);
         this.mesh.rotation.y = currentRot;
+        if (this.isSitting && typeof this.avatar.setSitting === 'function') {
+          this.avatar.setSitting(true);
+        }
         this.scene.add(this.mesh);
       }
     });
 
     // Listen for jump event
-    window.addEventListener('player-jump', () => this.jump());
+    this._onJumpEvent = () => this.jump();
+    window.addEventListener('player-jump', this._onJumpEvent);
+  }
+
+  destroy() {
+    if (this._unsubscribeState) {
+      this._unsubscribeState();
+      this._unsubscribeState = null;
+    }
+    if (this._onJumpEvent) {
+      window.removeEventListener('player-jump', this._onJumpEvent);
+      this._onJumpEvent = null;
+    }
+    if (this.avatar && typeof this.avatar.dispose === 'function') {
+      this.avatar.dispose();
+    }
   }
 
   getInitialSpawnFromURL() {
@@ -88,7 +122,14 @@ export class CharacterController {
     if (!this.isJumping && this.jumpCooldown <= 0) {
       this.isJumping = true;
       this.velocityY = this.jumpForce;
-      this.jumpCooldown = 15; // Short cooldown frames
+      this.jumpCooldown = 15;
+    }
+  }
+
+  setWalkableMeshes(meshes) {
+    this.walkableMeshes = Array.isArray(meshes) ? meshes.filter(Boolean) : [];
+    if (this.mesh && !this.isSitting && !this.isJumping) {
+      this.mesh.position.y = this.getGroundHeight(this.mesh.position.x, this.mesh.position.z);
     }
   }
 
@@ -104,7 +145,28 @@ export class CharacterController {
     if (typeof this.customHeightChecker === 'function') {
       return this.customHeightChecker(x, z);
     }
-    return TerrainManager.getHeight(x, z);
+
+    let hitY = null;
+    if (this.walkableMeshes.length > 0) {
+      const approxY = this.mesh ? this.mesh.position.y : TerrainManager.getHeight(x, z);
+      this._groundRayOrigin.set(x, approxY + 3.2, z);
+      this._groundRaycaster.set(this._groundRayOrigin, this._groundRayDown);
+      this._groundRaycaster.near = 0.05;
+      this._groundRaycaster.far = 14.0;
+
+      const hits = this._groundRaycaster.intersectObjects(this.walkableMeshes, false);
+      if (hits.length > 0) {
+        const baselineY = TerrainManager.getHeight(x, z);
+        for (const hit of hits) {
+          if (hit.point.y >= baselineY - 0.35 && hit.point.y <= baselineY + 0.45) {
+            hitY = hit.point.y;
+            break;
+          }
+        }
+      }
+    }
+
+    return TerrainManager.resolveFilteredGroundHeight(x, z, hitY);
   }
 
   isWalkableZone(x, z) {
@@ -118,39 +180,45 @@ export class CharacterController {
     return TerrainManager.checkCollision(x, z);
   }
 
-  sitOn(seatPos, faceAngle) {
+  sitOn(seatPos, faceAngle, seatingOptions = {}) {
     this.isSitting = true;
     this.isMoving = false;
     this.velocityY = 0;
     this.isJumping = false;
 
-    // Chair cushion is at seatY ~0.44m. Avatar hip is at y=0.98.
-    // Placing mesh at seatY - 0.46 aligns thighs and seat pad flush with feet on floor.
-    const seatY = typeof seatPos.y === 'number' ? seatPos.y : 0.44;
-    this.mesh.position.set(seatPos.x, seatY - 0.46, seatPos.z);
-    this.mesh.rotation.y = faceAngle;
+    const cushionTopY = typeof seatingOptions.cushionTopY === 'number'
+      ? seatingOptions.cushionTopY
+      : (typeof seatPos.y === 'number' ? seatPos.y + 0.035 : 0.475);
+    const supportFloorY = typeof seatingOptions.supportFloorY === 'number'
+      ? seatingOptions.supportFloorY
+      : 0.0;
+
+    const pose = computeSeatingRigPose({
+      cushionTopY,
+      supportFloorY,
+      seatCenterX: seatPos.x,
+      seatCenterZ: seatPos.z,
+      faceAngle,
+      seatDepthForwardOffset: typeof seatingOptions.seatDepthForwardOffset === 'number'
+        ? seatingOptions.seatDepthForwardOffset
+        : -0.02
+    });
+
+    this.mesh.position.set(pose.rootPosition.x, pose.rootPosition.y, pose.rootPosition.z);
+    this.mesh.rotation.y = pose.faceAngle;
 
     if (typeof this.avatar.setSitting === 'function') {
-      this.avatar.setSitting(true);
-    } else {
-      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = -Math.PI / 2;
-      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = -Math.PI / 2;
-      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = -0.55;
-      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -0.55;
+      this.avatar.setSitting(true, pose);
     }
   }
 
   standUp(standOffset = null) {
     if (!this.isSitting) return;
     this.isSitting = false;
+    this._standingSettleTimer = 0.24;
 
     if (typeof this.avatar.setSitting === 'function') {
       this.avatar.setSitting(false);
-    } else {
-      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = 0;
-      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
-      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = 0;
-      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = 0;
     }
 
     if (standOffset) {
@@ -162,7 +230,6 @@ export class CharacterController {
 
   move(dx, dz, intensity = 1.0, jumpInput = false, camera = null) {
     if (this.isSitting) {
-      // Disengage sitting on movement or jump input
       if (Math.abs(dx) > 0.05 || Math.abs(dz) > 0.05 || jumpInput) {
         this.standUp();
       } else {
@@ -170,7 +237,6 @@ export class CharacterController {
       }
     }
 
-    // Check jump input
     if (jumpInput) {
       this.jump();
     }
@@ -182,7 +248,6 @@ export class CharacterController {
 
     this.isMoving = true;
 
-    // Convert input vector to Camera-Relative world motion
     let moveDirX = dx;
     let moveDirZ = dz;
 
@@ -195,19 +260,14 @@ export class CharacterController {
         const right = new THREE.Vector3();
         right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
 
-        // dz is forward/backward (-1 for forward/W/up, +1 for back/S/down)
-        // dx is left/right (-1 for left/A, +1 for right/D)
         moveDirX = right.x * dx - forward.x * dz;
         moveDirZ = right.z * dx - forward.z * dz;
       }
     }
 
-    // Intensity-based movement speed scaling (cozy walking curve)
-    // 20% drag = slow walk, 60% = normal walk, 100% = fast walk
     const clampedIntensity = Math.max(0.1, Math.min(1.0, intensity));
     const currentSpeed = this.speed * (0.35 + 0.65 * clampedIntensity);
 
-    // Normalize movement direction so diagonal travel has identical uniform velocity
     const moveLen = Math.hypot(moveDirX, moveDirZ);
     if (moveLen > 0.0001) {
       moveDirX /= moveLen;
@@ -217,7 +277,6 @@ export class CharacterController {
     const nextX = this.mesh.position.x + moveDirX * currentSpeed;
     const nextZ = this.mesh.position.z + moveDirZ * currentSpeed;
 
-    // Obstacle Collision & Invisible Wall Check on X and Z axis
     if (!this.check3DCollision(nextX, this.mesh.position.z)) {
       this.mesh.position.x = nextX;
     }
@@ -225,83 +284,84 @@ export class CharacterController {
       this.mesh.position.z = nextZ;
     }
 
-    // Smooth Character Rotation (Lerp angle towards actual movement direction)
+    // Smooth Character Rotation towards actual movement direction
     const targetRotation = Math.atan2(moveDirX, moveDirZ);
     let diff = targetRotation - this.mesh.rotation.y;
     while (diff < -Math.PI) diff += Math.PI * 2;
     while (diff > Math.PI) diff -= Math.PI * 2;
+    this._lastTurnDelta = Math.abs(diff);
+    this._lastTurnDir = Math.sign(diff);
     this.mesh.rotation.y += diff * 0.18;
   }
 
-  update() {
+  update(delta = 0.016) {
     if (this.isSitting) {
-      // Gentle breathing animation while sitting
       this.animTime += 0.05;
-      const breath = Math.sin(this.animTime * 0.4) * 0.02;
-      if (this.avatar.head) this.avatar.head.position.y = 2.14 + breath;
+      if (typeof this.avatar.updateAnimation === 'function') {
+        this.avatar.updateAnimation(CHARACTER_ANIM_STATES.SITTING, delta, this.animTime);
+      }
       return;
     }
 
-    this.animTime += 0.15;
+    this.animTime += Math.min(0.24, Math.max(0.06, delta * 9.0));
     if (this.jumpCooldown > 0) this.jumpCooldown--;
+    if (this._standingSettleTimer > 0) {
+      this._standingSettleTimer = Math.max(0, this._standingSettleTimer - delta);
+    }
 
     const groundY = this.getGroundHeight(this.mesh.position.x, this.mesh.position.z);
 
-    // 1. Process Jump Physics & Dynamic Shadow Scaling
+    // 1. Process Jump Physics & Ground Tracking
     if (this.isJumping) {
       this.mesh.position.y += this.velocityY;
       this.velocityY += this.gravity;
 
-      // Ground Touch Down
       if (this.mesh.position.y <= groundY) {
         this.mesh.position.y = groundY;
         this.isJumping = false;
         this.velocityY = 0;
       }
     } else {
-      // Smoothly adapt elevation when traversing stepped terraces & staircases with precise snap
       const diffY = groundY - this.mesh.position.y;
       if (Math.abs(diffY) < 0.02) {
         this.mesh.position.y = groundY;
       } else {
-        this.mesh.position.y += diffY * 0.45;
+        this.mesh.position.y += diffY * 0.48;
       }
     }
 
     const isWalkingView = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'walking';
 
-    // 2. Process Stride / Idle Animation
-    if (this.isMoving || isWalkingView) {
-      // Walking Stride Animation Cycle
-      const tAnim = isWalkingView ? 1.05 : this.animTime * 1.5;
-      const legAngle = Math.sin(tAnim) * 0.45;
-      const armAngle = Math.sin(tAnim) * 0.38;
-
-      // Dispatch footstep audio event on stride zero-crossing
-      if (!this.isJumping) {
-        const curPhase = Math.sin(tAnim);
-        if (typeof this.prevStepPhase === 'number') {
-          if ((this.prevStepPhase <= 0 && curPhase > 0) || (this.prevStepPhase >= 0 && curPhase < 0)) {
-            window.dispatchEvent(new CustomEvent('player-step'));
-          }
-        }
-        this.prevStepPhase = curPhase;
-      }
-
-      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = legAngle;
-      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = -legAngle;
-      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = -armAngle;
-      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = armAngle;
-      if (this.avatar.head) this.avatar.head.position.y = 2.14 + Math.abs(Math.sin(tAnim)) * 0.03;
-    } else {
-      // Natural Idle Breathing Animation Cycle
-      const breath = Math.sin(this.animTime * 0.4) * 0.03;
-      if (this.avatar.leftLeg) this.avatar.leftLeg.rotation.x = 0;
-      if (this.avatar.rightLeg) this.avatar.rightLeg.rotation.x = 0;
-      if (this.avatar.leftArm) this.avatar.leftArm.rotation.x = breath * 0.4;
-      if (this.avatar.rightArm) this.avatar.rightArm.rotation.x = -breath * 0.4;
-      if (this.avatar.head) this.avatar.head.position.y = 2.14 + breath;
+    // 2. Determine unified animation state
+    let nextState = CHARACTER_ANIM_STATES.IDLE;
+    if (this._standingSettleTimer > 0) {
+      nextState = CHARACTER_ANIM_STATES.STANDING;
+    } else if (this.isMoving || isWalkingView) {
+      nextState = CHARACTER_ANIM_STATES.WALKING;
+    } else if (this._lastTurnDelta > 0.08) {
+      nextState = CHARACTER_ANIM_STATES.TURNING;
     }
+
+    // Dispatch footstep audio event on stride zero-crossing while walking grounded
+    if (nextState === CHARACTER_ANIM_STATES.WALKING && !this.isJumping) {
+      const tAnim = isWalkingView ? 1.05 : this.animTime * 1.5;
+      const curPhase = Math.sin(tAnim);
+      if (typeof this.prevStepPhase === 'number') {
+        if ((this.prevStepPhase <= 0 && curPhase > 0) || (this.prevStepPhase >= 0 && curPhase < 0)) {
+          window.dispatchEvent(new CustomEvent('player-step'));
+        }
+      }
+      this.prevStepPhase = curPhase;
+    }
+
+    if (typeof this.avatar.updateAnimation === 'function') {
+      this.avatar.updateAnimation(nextState, delta, this.animTime, {
+        isWalkingView,
+        turnDir: this._lastTurnDir * 0.16
+      });
+    }
+
+    this._lastTurnDelta *= 0.65;
   }
 
   getPosition() {

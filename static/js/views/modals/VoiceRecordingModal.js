@@ -1,36 +1,35 @@
 import { createModal } from '../../ui/Modal.js';
 import { gameState, PHASES } from '../../state/GameState.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
-import { audioSystem } from '../../game/AudioSystem.js';
+import { ASSET_MANIFEST } from '../../config/assetManifest.js';
+
+const VOICE_GREETING_AUDIO_URL = ASSET_MANIFEST.audio.voiceGreeting.url;
 
 export function createVoiceRecordingModal() {
   const content = document.createElement('div');
   content.className = 'voice-modal-content';
 
   let isPlaying = false;
+  let audioAvailable = false;
   let audioContext = null;
   let analyser = null;
+  let mediaSource = null;
   let animationId = null;
-  let duration = 48.0; // Simulated seconds duration for voice greeting
-  let currentTime = 0.0;
-  let progressInterval = null;
-  let oscillator = null;
-  let gainNode = null;
+
+  const audioEl = new Audio();
+  audioEl.preload = 'metadata';
 
   content.innerHTML = `
     <div style="text-align: center; margin-bottom: 12px;">
       <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
-        SEKAPUR SIRIH ADJIE &amp; DAULIKA
+        PESAN SUARA ADJIE &amp; DAULIKA
       </span>
       <h3 style="font-size: 15px; color: #fff; margin: 4px 0 2px;">
         Ada pesan kecil dari kami buat kamu.
       </h3>
-      <p style="font-size: 11px; color: #ffbe97; font-style: italic; margin-top: 2px;">
-        "Pesan suara kami sedang disiapkan."
-      </p>
     </div>
 
-    <!-- Audio Player Glassmorphic Card -->
+    <!-- Real Audio Player Card -->
     <div style="
       position: relative;
       background: radial-gradient(circle at center, #2b1828 0%, #110914 100%);
@@ -57,23 +56,35 @@ export function createVoiceRecordingModal() {
         <canvas id="voice-waveform-canvas" width="340" height="72" style="width: 100%; height: 100%; display: block;"></canvas>
       </div>
 
+      <!-- Honest Availability Status Notice when MP3 is not yet provided -->
+      <p id="voice-availability-note" style="
+        font-size: 11px;
+        color: #ffbe97;
+        text-align: center;
+        line-height: 1.45;
+        margin: 0 0 10px;
+      ">
+        Memeriksa rekaman suara...
+      </p>
+
       <!-- Timeline & Time readout -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span id="voice-current-time" style="font-size: 10px; color: #f5eedc; font-family: monospace;">00:00</span>
-        <input type="range" id="voice-seek-bar" min="0" max="100" value="0" style="
+        <span id="voice-current-time" style="font-size: 10px; color: #f5eedc; font-family: monospace;">--:--</span>
+        <input type="range" id="voice-seek-bar" min="0" max="100" value="0" disabled style="
           flex: 1;
           margin: 0 10px;
           accent-color: var(--color-gold);
-          cursor: pointer;
+          cursor: not-allowed;
           height: 4px;
+          opacity: 0.45;
         ">
-        <span id="voice-total-time" style="font-size: 10px; color: #a0a0b0; font-family: monospace;">00:48</span>
+        <span id="voice-total-time" style="font-size: 10px; color: #a0a0b0; font-family: monospace;">--:--</span>
       </div>
 
       <!-- Playback & Volume Control Strip -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <button type="button" id="voice-play-pause-btn" style="
+          <button type="button" id="voice-play-pause-btn" disabled style="
             width: 38px;
             height: 38px;
             border-radius: 50%;
@@ -85,19 +96,20 @@ export function createVoiceRecordingModal() {
             display: flex;
             align-items: center;
             justify-content: center;
-            cursor: pointer;
+            cursor: not-allowed;
+            opacity: 0.45;
             box-shadow: 2px 2px 0 #000;
-            transition: transform 0.1s;
+            transition: transform 0.1s, opacity 0.2s;
           ">▶</button>
-          <span id="voice-status-pill" style="font-size: 9px; letter-spacing: 1px; color: var(--color-gold-light); font-weight: bold;">
-            SIAP DIDENGARKAN
+          <span id="voice-status-pill" style="font-size: 9px; letter-spacing: 0.8px; color: var(--color-gold-light); font-weight: bold;">
+            MENYIAPKAN AUDIO...
           </span>
         </div>
 
         <!-- Volume Slider -->
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 12px; color: #aaa;">🔊</span>
-          <input type="range" id="voice-volume-slider" min="0" max="1" step="0.05" value="0.8" style="
+          <input type="range" id="voice-volume-slider" min="0" max="1" step="0.05" value="0.85" style="
             width: 65px;
             accent-color: var(--color-gold);
             cursor: pointer;
@@ -108,8 +120,8 @@ export function createVoiceRecordingModal() {
 
     <!-- Personal message text -->
     <div style="text-align: center; font-size: 11px; opacity: 0.9; line-height: 1.5; margin-bottom: 16px;">
-      Terima kasih sudah meluangkan waktu berharga untuk membuka undangan kami. 
-      Langkah demi langkah di taman ini adalah cerminan rasa syukur kami atas kehadiranmu.
+      Terima kasih sudah meluangkan waktu untuk membuka undangan kami. 
+      Semoga kamu menikmati perjalanan kecil di taman ini.
     </div>
   `;
 
@@ -118,62 +130,109 @@ export function createVoiceRecordingModal() {
   const playBtn = content.querySelector('#voice-play-pause-btn');
   const seekBar = content.querySelector('#voice-seek-bar');
   const currentTimeEl = content.querySelector('#voice-current-time');
+  const totalTimeEl = content.querySelector('#voice-total-time');
   const volumeSlider = content.querySelector('#voice-volume-slider');
   const statusPill = content.querySelector('#voice-status-pill');
+  const availabilityNote = content.querySelector('#voice-availability-note');
 
-  // Format MM:SS
   const formatTime = (secs) => {
+    if (!Number.isFinite(secs) || secs < 0) return '--:--';
     const m = Math.floor(secs / 60);
     const s = Math.floor(secs % 60);
     return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // Web Audio Context setup
-  const initAudio = () => {
-    if (!audioContext) {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (AudioCtx) {
-        audioContext = new AudioCtx();
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 64;
-        gainNode = audioContext.createGain();
-        gainNode.gain.value = parseFloat(volumeSlider.value);
-        gainNode.connect(analyser);
-        analyser.connect(audioContext.destination);
-      }
-    }
-    if (audioContext && audioContext.state === 'suspended') {
-      audioContext.resume();
-    }
+  const setUnavailableState = () => {
+    audioAvailable = false;
+    isPlaying = false;
+    playBtn.disabled = true;
+    playBtn.style.cursor = 'not-allowed';
+    playBtn.style.opacity = '0.45';
+    seekBar.disabled = true;
+    seekBar.style.cursor = 'not-allowed';
+    seekBar.style.opacity = '0.45';
+    currentTimeEl.textContent = '--:--';
+    totalTimeEl.textContent = '--:--';
+    statusPill.textContent = 'BELUM TERSEDIA';
+    statusPill.style.color = '#ffbe97';
+    availabilityNote.textContent =
+      'Pesan kecil dari kami sedang disiapkan. Sambil menunggu, yuk lanjut menjelajahi taman kami!';
   };
 
-  const playSynthesizedVoiceTone = () => {
-    if (!audioContext) return;
+  const setAvailableState = () => {
+    audioAvailable = true;
+    playBtn.disabled = false;
+    playBtn.style.cursor = 'pointer';
+    playBtn.style.opacity = '1';
+    seekBar.disabled = false;
+    seekBar.style.cursor = 'pointer';
+    seekBar.style.opacity = '1';
+    currentTimeEl.textContent = formatTime(0);
+    totalTimeEl.textContent = formatTime(audioEl.duration);
+    statusPill.textContent = 'SIAP DIDENGARKAN';
+    statusPill.style.color = 'var(--color-gold-light)';
+    availabilityNote.textContent = 'Ketuk tombol putar untuk mendengarkan sapaan hangat dari Adjie & Daulika.';
+  };
+
+  const ensureAnalyser = () => {
+    if (analyser || !audioAvailable) return;
     try {
-      if (oscillator) {
-        oscillator.stop();
-        oscillator.disconnect();
-      }
-      oscillator = audioContext.createOscillator();
-      oscillator.type = 'triangle';
-      oscillator.frequency.setValueAtTime(329.63, audioContext.currentTime); // E4 warm note
-      // Modulate frequency gently like speech inflection
-      oscillator.frequency.linearRampToValueAtTime(392.00, audioContext.currentTime + 1.2);
-      oscillator.frequency.linearRampToValueAtTime(329.63, audioContext.currentTime + 2.5);
-      oscillator.connect(gainNode);
-      oscillator.start();
-    } catch (e) {}
-  };
-
-  const stopSynthesizedVoiceTone = () => {
-    if (oscillator) {
-      try {
-        oscillator.stop();
-        oscillator.disconnect();
-      } catch (e) {}
-      oscillator = null;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      audioContext = new AudioCtx();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 64;
+      mediaSource = audioContext.createMediaElementSource(audioEl);
+      mediaSource.connect(analyser);
+      analyser.connect(audioContext.destination);
+    } catch {
+      analyser = null;
     }
   };
+
+  audioEl.volume = parseFloat(volumeSlider.value);
+
+  audioEl.addEventListener('loadedmetadata', () => {
+    if (Number.isFinite(audioEl.duration) && audioEl.duration > 0) {
+      setAvailableState();
+    }
+  });
+
+  audioEl.addEventListener('timeupdate', () => {
+    if (!audioAvailable || !Number.isFinite(audioEl.duration) || audioEl.duration <= 0) return;
+    currentTimeEl.textContent = formatTime(audioEl.currentTime);
+    seekBar.value = String((audioEl.currentTime / audioEl.duration) * 100);
+  });
+
+  audioEl.addEventListener('ended', () => {
+    isPlaying = false;
+    playBtn.textContent = '▶';
+    statusPill.textContent = 'SELESAI DIPUTAR';
+    statusPill.style.color = 'var(--color-gold-light)';
+  });
+
+  audioEl.addEventListener('error', () => {
+    setUnavailableState();
+  });
+
+  // Check server manifest availability cleanly (zero 404 noise if file not yet uploaded)
+  import('../../config/assetManifest.js')
+    .then(({ fetchAssetStatus }) => fetchAssetStatus())
+    .then((status) => {
+      if (status && status.audio && status.audio.voiceGreeting === true) {
+        audioEl.src = VOICE_GREETING_AUDIO_URL;
+      } else if (!status) {
+        return fetch(VOICE_GREETING_AUDIO_URL, { method: 'HEAD' }).then((resp) => {
+          if (resp.ok) audioEl.src = VOICE_GREETING_AUDIO_URL;
+          else setUnavailableState();
+        });
+      } else {
+        setUnavailableState();
+      }
+    })
+    .catch(() => {
+      setUnavailableState();
+    });
 
   // Waveform drawing loop
   const renderWaveform = () => {
@@ -193,11 +252,12 @@ export function createVoiceRecordingModal() {
 
     for (let i = 0; i < bufferLength; i++) {
       let barHeight;
-      if (isPlaying) {
+      if (isPlaying && analyser) {
         barHeight = (dataArray[i] / 255) * (height * 0.8) + 6;
+      } else if (isPlaying) {
+        barHeight = (Math.sin(Date.now() * 0.01 + i * 0.5) * 0.5 + 0.5) * (height * 0.55) + 8;
       } else {
-        // Subtle resting idle wave
-        barHeight = Math.sin(Date.now() * 0.003 + i * 0.3) * 6 + 10;
+        barHeight = Math.sin(Date.now() * 0.0025 + i * 0.3) * 5 + 10;
       }
 
       const grad = ctx.createLinearGradient(0, height / 2 - barHeight / 2, 0, height / 2 + barHeight / 2);
@@ -213,47 +273,62 @@ export function createVoiceRecordingModal() {
 
   renderWaveform();
 
-  // Play / Pause toggle
-  const togglePlay = () => {
-    initAudio();
-    isPlaying = !isPlaying;
-    playBtn.textContent = isPlaying ? '⏸' : '▶';
-    statusPill.textContent = isPlaying ? 'MEMUTAR REKAMAN...' : 'DIJEDA';
-    statusPill.style.color = isPlaying ? '#44ff88' : 'var(--color-gold-light)';
+  const togglePlay = async () => {
+    if (!audioAvailable) return;
+    ensureAnalyser();
+    if (audioContext && audioContext.state === 'suspended') {
+      try { await audioContext.resume(); } catch {}
+    }
 
     if (isPlaying) {
-      playSynthesizedVoiceTone();
-      progressInterval = setInterval(() => {
-        currentTime += 0.5;
-        if (currentTime >= duration) {
-          currentTime = 0;
-          togglePlay();
-        }
-        seekBar.value = (currentTime / duration) * 100;
-        currentTimeEl.textContent = formatTime(currentTime);
-      }, 500);
+      audioEl.pause();
+      isPlaying = false;
+      playBtn.textContent = '▶';
+      statusPill.textContent = 'DIJEDA';
+      statusPill.style.color = 'var(--color-gold-light)';
     } else {
-      stopSynthesizedVoiceTone();
-      clearInterval(progressInterval);
+      try {
+        await audioEl.play();
+        isPlaying = true;
+        playBtn.textContent = '⏸';
+        statusPill.textContent = 'MEMUTAR PESAN...';
+        statusPill.style.color = '#44ff88';
+      } catch {
+        setUnavailableState();
+      }
     }
   };
 
   playBtn.addEventListener('click', togglePlay);
 
   seekBar.addEventListener('input', (e) => {
-    currentTime = (parseFloat(e.target.value) / 100) * duration;
-    currentTimeEl.textContent = formatTime(currentTime);
+    if (!audioAvailable || !Number.isFinite(audioEl.duration) || audioEl.duration <= 0) return;
+    audioEl.currentTime = (parseFloat(e.target.value) / 100) * audioEl.duration;
+    currentTimeEl.textContent = formatTime(audioEl.currentTime);
   });
 
   volumeSlider.addEventListener('input', (e) => {
-    if (gainNode) {
-      gainNode.gain.value = parseFloat(e.target.value);
-    }
+    audioEl.volume = parseFloat(e.target.value);
   });
 
-  // Action Button: Single prominent CTA "Jelajahi Taman"
+  const cleanup = () => {
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+    try {
+      audioEl.pause();
+      audioEl.removeAttribute('src');
+      audioEl.load();
+    } catch {}
+    if (audioContext && audioContext.state !== 'closed') {
+      try { audioContext.close(); } catch {}
+    }
+  };
+
+  // Single prominent CTA without redundant top-right close button
   const ctaBtn = createRetroButton({
-    text: '🌿 JELAJAHI TAMAN',
+    text: '🌿 Jelajahi taman kami',
     className: 'rsvp-btn active',
     onClick: () => {
       cleanup();
@@ -264,20 +339,11 @@ export function createVoiceRecordingModal() {
   ctaBtn.style.width = '100%';
   content.appendChild(ctaBtn);
 
-  const cleanup = () => {
-    if (animationId) cancelAnimationFrame(animationId);
-    if (progressInterval) clearInterval(progressInterval);
-    stopSynthesizedVoiceTone();
-    if (audioContext && audioContext.state !== 'closed') {
-      try { audioContext.close(); } catch (e) {}
-    }
-  };
-
   return createModal({
     id: 'voice-recording-modal',
-    title: '🎙️ REKAMAN SUARA ADJIE & DAULIKA',
-    content: content,
-    hideCloseBtn: true, // No redundant close button!
+    title: '🎙️ PESAN SUARA ADJIE & DAULIKA',
+    content,
+    hideCloseBtn: true,
     onClose: () => {
       cleanup();
       gameState.setPhase(PHASES.EXPLORATION);

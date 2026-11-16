@@ -3,23 +3,35 @@ import { CameraController } from './CameraController.js';
 import { CharacterController } from './CharacterController.js';
 import { InteractionSystem } from './InteractionSystem.js';
 import { HachiGarden3D } from '../world/HachiGarden3D.js';
+import {
+  detectSoftwareWebGL,
+  configurePBRPipeline,
+  scheduleAfterDraw,
+  disposeSceneResources
+} from './WebGLUtils.js';
 
 export class ThreeScene {
   constructor(canvasContainer) {
     this.container = canvasContainer;
     this.isRunning = false;
+    this.isSoftwareGl = detectSoftwareWebGL();
+    this._rafId = null;
+    this._afterDrawHandle = null;
+    this._lastFrameTime = performance.now();
 
-    // 1. WebGL Renderer with Mobile Pixel Ratio Cap
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    // 1. WebGL Renderer with standardized PBR Pipeline
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.isSoftwareGl, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setSize(containerWidth(this.container), containerHeight(this.container));
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = false; // Fast mobile WebGL rendering
+    this.renderer.shadowMap.enabled = false;
+    this.renderer.domElement.dataset.testid = 'garden-webgl-canvas';
     this.container.appendChild(this.renderer.domElement);
 
     // 2. Scene & Indonesian Sunset Twilight Atmosphere
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color('#b86a82'); // Warm Twilight Rose horizon
-    this.scene.fog = new THREE.FogExp2('#b86a82', 0.0048); // Gentle atmospheric distance haze
+    this.scene.background = new THREE.Color('#b86a82');
+    this.scene.fog = new THREE.FogExp2('#b86a82', 0.0048);
+
+    configurePBRPipeline(this.renderer, this.scene, this.isSoftwareGl);
 
     this.camera = new THREE.PerspectiveCamera(
       48,
@@ -39,15 +51,12 @@ export class ThreeScene {
 
     // 6. Character Controller
     this.character = new CharacterController(this.scene);
+    this.character.setWalkableMeshes(this.garden.walkableMeshes);
+    this.cameraController.setOccluderMeshes(this.garden.cameraOccluders);
     this.cameraController.setTarget(this.character.getPosition());
 
     // 7. Interaction System
     this.interactionSystem = new InteractionSystem(this.scene);
-
-    // 8. Internal Dev Performance Diagnostics
-    this.frameCount = 0;
-    this.lastFpsTime = performance.now();
-    this.fps = 60;
 
     // Resize Handler
     this.onWindowResize = () => this.handleResize();
@@ -55,62 +64,47 @@ export class ThreeScene {
   }
 
   setupGoldenHourLighting() {
-    // Warm Twilight Hemisphere Ambient Light (Rose-Peach Sky / Tea Green Ground)
     const ambientLight = new THREE.HemisphereLight('#ffa285', '#24421b', 1.05);
     this.scene.add(ambientLight);
 
-    // Warm Sunset Directional Sun Light
     const sunLight = new THREE.DirectionalLight('#ffe2ce', 1.35);
     sunLight.position.set(35, 45, 25);
     this.scene.add(sunLight);
 
-    // Soft Rim Light from Mountain Horizon (Atmospheric Depth)
     const rimLight = new THREE.DirectionalLight('#a36b9c', 0.55);
     rimLight.position.set(-30, 25, -50);
     this.scene.add(rimLight);
   }
 
   start() {
+    if (this.isRunning) return;
     this.isRunning = true;
+    this._lastFrameTime = performance.now();
     this.loop();
   }
 
   stop() {
     this.isRunning = false;
+    if (this._rafId !== null) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+    if (this._afterDrawHandle !== null) {
+      clearTimeout(this._afterDrawHandle);
+      this._afterDrawHandle = null;
+    }
   }
 
-  update() {
+  update(delta = 0.016) {
     if (this.character) {
-      this.character.update();
-      // Target camera to 3D character position
+      this.character.update(delta);
       this.cameraController.setTarget(this.character.getPosition());
-      // Update Interaction System proximity
       if (this.interactionSystem) {
         this.interactionSystem.update(this.character.getPosition());
       }
     }
-    this.cameraController.update();
-    if (this.garden) this.garden.update();
-
-    // Internal Dev Performance Logging
-    this.updateDiagnostics();
-  }
-
-  updateDiagnostics() {
-    this.frameCount++;
-    const now = performance.now();
-    if (now - this.lastFpsTime >= 1000) {
-      this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsTime));
-      this.frameCount = 0;
-      this.lastFpsTime = now;
-
-      // Dev Diagnostics
-      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.debug(
-          `[WebGL Diagnostics] FPS: ${this.fps} | Draw Calls: ${this.renderer.info.render.calls} | Geometries: ${this.renderer.info.memory.geometries} | Textures: ${this.renderer.info.memory.textures}`
-        );
-      }
-    }
+    this.cameraController.update(delta);
+    if (this.garden) this.garden.update(delta);
   }
 
   render() {
@@ -119,9 +113,21 @@ export class ThreeScene {
 
   loop() {
     if (!this.isRunning) return;
-    this.update();
+    const now = performance.now();
+    const rawDelta = (now - this._lastFrameTime) / 1000;
+    this._lastFrameTime = now;
+    const delta = Math.max(0.001, Math.min(0.05, rawDelta || 0.016));
+
+    this.update(delta);
     this.render();
-    requestAnimationFrame(() => this.loop());
+
+    if (this.isSoftwareGl) {
+      scheduleAfterDraw(this.renderer, () => this.loop(), (id) => {
+        this._afterDrawHandle = id;
+      });
+    } else {
+      this._rafId = requestAnimationFrame(() => this.loop());
+    }
   }
 
   handleResize() {
@@ -138,17 +144,11 @@ export class ThreeScene {
     this.stop();
     window.removeEventListener('resize', this.onWindowResize);
 
-    // Traverse scene and dispose geometries/materials
-    this.scene.traverse((obj) => {
-      if (obj.geometry) obj.geometry.dispose();
-      if (obj.material) {
-        if (Array.isArray(obj.material)) {
-          obj.material.forEach((mat) => mat.dispose());
-        } else {
-          obj.material.dispose();
-        }
-      }
-    });
+    if (this.character && typeof this.character.destroy === 'function') {
+      this.character.destroy();
+    }
+
+    disposeSceneResources(this.scene);
 
     this.renderer.dispose();
     if (this.renderer.domElement && this.renderer.domElement.parentNode) {

@@ -1,16 +1,20 @@
 import * as THREE from 'three';
 import { characterTextures } from './CharacterTextures.js';
+import { CHARACTER_ANIM_STATES, loadOptionalRiggedCharacter } from './CharacterAnimator.js';
 
 /**
- * Avatar3D - High-Fidelity Realistic Human Character Generator
- * Transforms primitive geometric characters into natural-looking, anatomically
- * proportioned 3D digital humans with PBR skin, realistic facial anatomy,
- * textured hair, tailored wedding attire, and articulated hands.
+ * Avatar3D - Semi-Realistic Digital Human Character Generator + Optional Rigged GLB Adapter
+ * Provides anatomically proportioned 3D digital humans with PBR skin, sculpted
+ * brow arches, contoured organic palms/knuckles, hair textures, tailored attire,
+ * and a unified animation state interface compatible with optional rigged .glb models.
  */
 export class Avatar3D {
-  constructor(config = {}) {
+  constructor(config = {}, options = {}) {
     this.group = new THREE.Group();
+    this.rigRoot = new THREE.Group();
+    this.group.add(this.rigRoot);
     this.config = config;
+    this.role = options.role || 'guest';
 
     // Body parts references required by CharacterController for smooth walking/sitting
     this.leftLeg = null;
@@ -22,25 +26,193 @@ export class Avatar3D {
     this.torso = null;
     this.head = null;
     this.shadow = null;
+    this.proceduralParts = [];
+
+    this.animState = CHARACTER_ANIM_STATES.IDLE;
+    this.isSittingPose = false;
+    this._animElapsed = 0;
+    this._riggedModel = null;
+    this._isDisposed = false;
 
     this.buildRealisticCharacter();
+
+    if (options.enableOptionalGlb !== false && typeof window !== 'undefined') {
+      this._hydrateOptionalGlb();
+    }
   }
 
-  setSitting(isSitting) {
+  async _hydrateOptionalGlb() {
+    const loaded = await loadOptionalRiggedCharacter(this.role);
+    if (!loaded || this._isDisposed) {
+      if (loaded) loaded.dispose();
+      return;
+    }
+
+    this._riggedModel = loaded;
+    this.proceduralParts.forEach((part) => {
+      if (part) part.visible = false;
+    });
+    this.rigRoot.add(loaded.sceneRoot);
+    loaded.playState(this.isSittingPose ? CHARACTER_ANIM_STATES.SITTING : this.animState);
+  }
+
+  setAnimationState(stateName) {
+    const validStates = Object.values(CHARACTER_ANIM_STATES);
+    const next = validStates.includes(stateName) ? stateName : CHARACTER_ANIM_STATES.IDLE;
+    this.animState = next;
+    if (this._riggedModel) {
+      this._riggedModel.playState(next);
+    }
+  }
+
+  updateAnimation(stateName, delta = 0.016, animTime = 0, options = {}) {
+    this._animElapsed += delta;
+    this.setAnimationState(stateName);
+
+    if (this._riggedModel) {
+      this._riggedModel.update(delta);
+      return;
+    }
+
+    const baseHeadY = 2.14;
+
+    if (stateName === CHARACTER_ANIM_STATES.SITTING || this.isSittingPose) {
+      const breath = Math.sin(this._animElapsed * 2.1) * 0.014;
+      if (this.head) {
+        this.head.position.y = baseHeadY + breath;
+        this.head.rotation.y = Math.sin(this._animElapsed * 0.7) * 0.05;
+      }
+      return;
+    }
+
+    if (stateName === CHARACTER_ANIM_STATES.GREETING) {
+      const wave = Math.sin(this._animElapsed * 4.2);
+      const nod = Math.sin(this._animElapsed * 2.1) * 0.05;
+      if (this.rightArm) {
+        this.rightArm.rotation.x = -1.25 + wave * 0.14;
+        this.rightArm.rotation.z = -0.32 + wave * 0.12;
+      }
+      if (this.leftArm) this.leftArm.rotation.x = -0.18;
+      if (this.head) {
+        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.015;
+        this.head.rotation.x = nod;
+      }
+      return;
+    }
+
+    if (stateName === CHARACTER_ANIM_STATES.WALKING) {
+      const tAnim = options.isWalkingView ? 1.05 : animTime * 1.5;
+      const legAngle = Math.sin(tAnim) * 0.45;
+      const armAngle = Math.sin(tAnim) * 0.38;
+      const kneeFlex = Math.max(0, Math.sin(tAnim + 0.6)) * 0.28;
+
+      if (this.leftLeg) this.leftLeg.rotation.x = legAngle;
+      if (this.rightLeg) this.rightLeg.rotation.x = -legAngle;
+      if (this.leftKnee && !this.isSittingPose) this.leftKnee.rotation.x = legAngle < 0 ? Math.abs(legAngle) * 0.35 : 0;
+      if (this.rightKnee && !this.isSittingPose) this.rightKnee.rotation.x = legAngle > 0 ? Math.abs(legAngle) * 0.35 : 0;
+      if (this.leftArm) {
+        this.leftArm.rotation.x = -armAngle;
+        this.leftArm.rotation.z = 0.04 + kneeFlex * 0.04;
+      }
+      if (this.rightArm) {
+        this.rightArm.rotation.x = armAngle;
+        this.rightArm.rotation.z = -0.04 - kneeFlex * 0.04;
+      }
+      if (this.head) {
+        this.head.position.y = baseHeadY + Math.abs(Math.sin(tAnim)) * 0.028;
+        this.head.rotation.y *= 0.85;
+      }
+      return;
+    }
+
+    if (stateName === CHARACTER_ANIM_STATES.TURNING) {
+      const sway = Math.sin(this._animElapsed * 5.0) * 0.08;
+      if (this.leftLeg) this.leftLeg.rotation.x *= 0.7;
+      if (this.rightLeg) this.rightLeg.rotation.x *= 0.7;
+      if (this.leftKnee) this.leftKnee.rotation.x *= 0.7;
+      if (this.rightKnee) this.rightKnee.rotation.x *= 0.7;
+      if (this.leftArm) this.leftArm.rotation.x = sway;
+      if (this.rightArm) this.rightArm.rotation.x = -sway;
+      if (this.head) {
+        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.015;
+        this.head.rotation.y = Math.max(-0.18, Math.min(0.18, options.turnDir || 0.08));
+      }
+      return;
+    }
+
+    if (stateName === CHARACTER_ANIM_STATES.STANDING) {
+      if (this.leftLeg) this.leftLeg.rotation.x *= 0.6;
+      if (this.rightLeg) this.rightLeg.rotation.x *= 0.6;
+      if (this.leftKnee) this.leftKnee.rotation.x *= 0.6;
+      if (this.rightKnee) this.rightKnee.rotation.x *= 0.6;
+      if (this.leftArm) {
+        this.leftArm.rotation.x *= 0.65;
+        this.leftArm.rotation.z *= 0.65;
+      }
+      if (this.rightArm) {
+        this.rightArm.rotation.x *= 0.65;
+        this.rightArm.rotation.z *= 0.65;
+      }
+      if (this.head) {
+        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.0) * 0.015;
+        this.head.rotation.y *= 0.75;
+      }
+      return;
+    }
+
+    // Default IDLE breathing & natural stance
+    const breath = Math.sin(animTime * 0.4) * 0.025;
+    if (this.leftLeg) this.leftLeg.rotation.x = 0;
+    if (this.rightLeg) this.rightLeg.rotation.x = 0;
+    if (this.leftKnee) this.leftKnee.rotation.x = 0;
+    if (this.rightKnee) this.rightKnee.rotation.x = 0;
+    if (this.leftArm) {
+      this.leftArm.rotation.x = breath * 0.4;
+      this.leftArm.rotation.z = 0.03;
+    }
+    if (this.rightArm) {
+      this.rightArm.rotation.x = -breath * 0.4;
+      this.rightArm.rotation.z = -0.03;
+    }
+    if (this.head) {
+      this.head.position.y = baseHeadY + breath;
+      this.head.rotation.y *= 0.9;
+      this.head.rotation.x *= 0.9;
+    }
+  }
+
+  setSitting(isSitting, pose = null) {
+    this.isSittingPose = Boolean(isSitting);
+    this.setAnimationState(isSitting ? CHARACTER_ANIM_STATES.SITTING : CHARACTER_ANIM_STATES.IDLE);
+
     if (isSitting) {
-      if (this.leftLeg) this.leftLeg.rotation.x = -Math.PI / 2;
-      if (this.rightLeg) this.rightLeg.rotation.x = -Math.PI / 2;
-      if (this.leftKnee) this.leftKnee.rotation.x = Math.PI / 2;
-      if (this.rightKnee) this.rightKnee.rotation.x = Math.PI / 2;
-      if (this.leftArm) this.leftArm.rotation.x = -0.55;
-      if (this.rightArm) this.rightArm.rotation.x = -0.55;
+      const hipOffsetY = pose && typeof pose.hipOffsetY === 'number' ? pose.hipOffsetY : -0.44;
+      const thighPitchX = pose && typeof pose.thighPitchX === 'number' ? pose.thighPitchX : -Math.PI / 2;
+      const kneeBendX = pose && typeof pose.kneeBendX === 'number' ? pose.kneeBendX : Math.PI / 2;
+
+      this.rigRoot.position.y = hipOffsetY;
+      if (this.leftLeg) this.leftLeg.rotation.x = thighPitchX;
+      if (this.rightLeg) this.rightLeg.rotation.x = thighPitchX;
+      if (this.leftKnee) this.leftKnee.rotation.x = kneeBendX;
+      if (this.rightKnee) this.rightKnee.rotation.x = kneeBendX;
+      if (this.leftArm) this.leftArm.rotation.x = -0.52;
+      if (this.rightArm) this.rightArm.rotation.x = -0.52;
     } else {
+      this.rigRoot.position.y = 0;
       if (this.leftLeg) this.leftLeg.rotation.x = 0;
       if (this.rightLeg) this.rightLeg.rotation.x = 0;
       if (this.leftKnee) this.leftKnee.rotation.x = 0;
       if (this.rightKnee) this.rightKnee.rotation.x = 0;
       if (this.leftArm) this.leftArm.rotation.x = 0;
       if (this.rightArm) this.rightArm.rotation.x = 0;
+    }
+  }
+
+  dispose() {
+    this._isDisposed = true;
+    if (this._riggedModel) {
+      this._riggedModel.dispose();
+      this._riggedModel = null;
     }
   }
 
@@ -77,14 +249,25 @@ export class Avatar3D {
     // Fabric Primary & Accent Materials
     let accentHex = '#d4af37'; // gold
     if (outfit === 'traditional_maroon') accentHex = '#e6be58';
+    else if (outfit === 'beskap_hitam') accentHex = '#d4af37';
+    else if (outfit === 'kebaya_putih') accentHex = '#e5cf8e';
     else if (outfit === 'tuxedo') accentHex = '#f8f9fa';
     else if (outfit === 'dress') accentHex = '#d4af37';
 
     const fabricMat = new THREE.MeshStandardMaterial({
       map: fabricMap,
-      roughness: 0.72,
-      metalness: 0.08,
+      roughness: outfit === 'kebaya_putih' ? 0.62 : 0.72,
+      metalness: outfit === 'beskap_hitam' ? 0.12 : 0.08,
     });
+
+    // Lower garment material: classic batik jarik for kebaya_putih, matching fabric otherwise
+    const lowerFabricMat = outfit === 'kebaya_putih'
+      ? new THREE.MeshStandardMaterial({
+          map: characterTextures.getBatikFabricTexture('batik_jarik'),
+          roughness: 0.74,
+          metalness: 0.06,
+        })
+      : fabricMat;
 
     const accentMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(accentHex),
@@ -106,7 +289,7 @@ export class Avatar3D {
       metalness: 0.04,
     });
 
-    // 2. Multi-Tier Grounding Contact Shadow
+    // 2. Multi-Tier Grounding Contact Shadow (remains directly on group at y=0)
     const shadowGroup = new THREE.Group();
     const innerShadowGeo = new THREE.CircleGeometry(0.55, 20);
     const innerShadowMat = new THREE.MeshBasicMaterial({
@@ -135,29 +318,27 @@ export class Avatar3D {
     this.shadow = shadowGroup;
     this.group.add(this.shadow);
 
-    // 3. Anatomically Proportioned Legs & Realistic Dress Shoes
-    // Hip Pivot Height: EXACTLY y = 0.98
-    // Bottom of footwear rests flush at y = 0.000
-    this.leftLeg = this.buildRealisticLeg(-0.16, true, fabricMat, shoeMat, skinMat);
-    this.rightLeg = this.buildRealisticLeg(0.16, false, fabricMat, shoeMat, skinMat);
-    this.group.add(this.leftLeg);
-    this.group.add(this.rightLeg);
+    // 3. Anatomically Proportioned Legs & Realistic Dress Shoes inside rigRoot
+    this.leftLeg = this.buildRealisticLeg(-0.16, true, lowerFabricMat, shoeMat, skinMat);
+    this.rightLeg = this.buildRealisticLeg(0.16, false, lowerFabricMat, shoeMat, skinMat);
+    this.rigRoot.add(this.leftLeg);
+    this.rigRoot.add(this.rightLeg);
 
-    // 4. Anatomically Proportioned Torso with Tailored Attire
-    this.torso = this.buildRealisticTorso(fabricMat, accentMat, skinMat, outfit);
-    this.group.add(this.torso);
+    // 4. Anatomically Proportioned Torso with Tailored Attire inside rigRoot
+    this.torso = this.buildRealisticTorso(fabricMat, lowerFabricMat, accentMat, skinMat, outfit);
+    this.rigRoot.add(this.torso);
 
-    // 5. Anatomically Proportioned Arms with Sculpted Hands
-    // Shoulder Pivot Height: EXACTLY y = 1.76
+    // 5. Anatomically Proportioned Arms with Sculpted Hands inside rigRoot
     this.leftArm = this.buildRealisticArm(-0.30, true, fabricMat, accentMat, skinMat);
     this.rightArm = this.buildRealisticArm(0.30, false, fabricMat, accentMat, skinMat);
-    this.group.add(this.leftArm);
-    this.group.add(this.rightArm);
+    this.rigRoot.add(this.leftArm);
+    this.rigRoot.add(this.rightArm);
 
-    // 6. Realistic Sculpted Head, Face & Hair
-    // Head Pivot Height: EXACTLY y = 2.14
+    // 6. Realistic Sculpted Head, Face & Hair inside rigRoot
     this.head = this.buildRealisticHead(skinMat, lipMat, hairMat, hairStyle, hairCol, accessory, accentMat);
-    this.group.add(this.head);
+    this.rigRoot.add(this.head);
+
+    this.proceduralParts = [this.leftLeg, this.rightLeg, this.torso, this.leftArm, this.rightArm, this.head];
   }
 
   /**
@@ -243,16 +424,16 @@ export class Avatar3D {
 
   /**
    * Builds an anatomically proportioned human torso with tailored wedding attire,
-   * natural waist taper, golden embroidered trim, and chest brooch.
+   * natural waist taper, beskap asymmetric placket / kebaya kutubaru panel, and chest brooch.
    */
-  buildRealisticTorso(fabricMat, accentMat, skinMat, outfit) {
+  buildRealisticTorso(fabricMat, lowerFabricMat, accentMat, skinMat, outfit) {
     const torsoGroup = new THREE.Group();
     torsoGroup.position.set(0, 0.98, 0);
 
     // A. Pelvis & Lower Hips (Wrapped in traditional Batik Jarik or tailored trousers)
     const pelvisGeo = new THREE.CylinderGeometry(0.24, 0.22, 0.30, 18);
     pelvisGeo.scale(1.18, 1.0, 0.88);
-    const pelvis = new THREE.Mesh(pelvisGeo, fabricMat);
+    const pelvis = new THREE.Mesh(pelvisGeo, lowerFabricMat);
     pelvis.position.set(0, 0.15, 0);
     torsoGroup.add(pelvis);
 
@@ -263,8 +444,8 @@ export class Avatar3D {
     waist.position.set(0, 0.38, 0);
     torsoGroup.add(waist);
 
-    // Gold Embroidered Waist Belt / Sabuk / Kamus
-    const beltGeo = new THREE.CylinderGeometry(0.265, 0.265, 0.07, 18);
+    // Gold Embroidered Waist Belt / Sabuk / Kamus / Selendang trim
+    const beltGeo = new THREE.CylinderGeometry(0.265, 0.265, 0.065, 18);
     beltGeo.scale(1.16, 1.0, 0.86);
     const belt = new THREE.Mesh(beltGeo, accentMat);
     belt.position.set(0, 0.32, 0);
@@ -279,7 +460,6 @@ export class Avatar3D {
 
     // D. Tailored Collar & Lapels
     if (outfit === 'tuxedo') {
-      // Satin Tuxedo Shawl Lapels
       const lapelL = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.42, 0.03), accentMat);
       lapelL.rotation.z = -0.22;
       lapelL.position.set(-0.11, 0.68, 0.20);
@@ -290,34 +470,97 @@ export class Avatar3D {
       lapelR.position.set(0.11, 0.68, 0.20);
       torsoGroup.add(lapelR);
 
-      // White Pleated Tuxedo Shirt Inlay & Bow Tie
       const shirtMat = new THREE.MeshStandardMaterial({ color: '#fcfcfc', roughness: 0.5 });
-      const shirtGeo = new THREE.BoxGeometry(0.12, 0.36, 0.02);
-      const shirt = new THREE.Mesh(shirtGeo, shirtMat);
+      const shirt = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.36, 0.02), shirtMat);
       shirt.position.set(0, 0.66, 0.19);
       torsoGroup.add(shirt);
 
-      // Silk Bow Tie
       const tieMat = new THREE.MeshStandardMaterial({ color: '#15151b', roughness: 0.3 });
       const bowTie = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.045, 0.03), tieMat);
       bowTie.position.set(0, 0.80, 0.21);
       torsoGroup.add(bowTie);
+    } else if (outfit === 'beskap_hitam') {
+      // Proper Black Traditional Beskap: High standing Mandarin collar + asymmetric diagonal closed flap + gold chain
+      const beskapBlackTrimMat = new THREE.MeshStandardMaterial({ color: '#101014', roughness: 0.55, metalness: 0.1 });
+      const collarGeo = new THREE.CylinderGeometry(0.116, 0.132, 0.11, 16);
+      collarGeo.scale(1.1, 1.0, 0.9);
+      const collar = new THREE.Mesh(collarGeo, beskapBlackTrimMat);
+      collar.position.set(0, 0.86, 0);
+      torsoGroup.add(collar);
+
+      // Thin gold collar piping rim
+      const collarPiping = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.008, 8, 20), accentMat);
+      collarPiping.rotation.x = Math.PI / 2;
+      collarPiping.position.set(0, 0.91, 0);
+      torsoGroup.add(collarPiping);
+
+      // Signature diagonal Beskap front overlapping flap (Tutup Beskap Miring)
+      const diagFlap = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.50, 0.03), beskapBlackTrimMat);
+      diagFlap.rotation.z = -0.22;
+      diagFlap.position.set(0.02, 0.59, 0.205);
+      torsoGroup.add(diagFlap);
+
+      // Diagonal Gold Buttons along asymmetric lapel edge
+      const btnMat = new THREE.MeshStandardMaterial({ color: '#f4c542', metalness: 0.95, roughness: 0.2 });
+      for (let b = 0; b < 4; b++) {
+        const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.018, 10), btnMat);
+        btn.rotation.x = Math.PI / 2;
+        btn.position.set(-0.04 + b * 0.032, 0.42 + b * 0.11, 0.225);
+        torsoGroup.add(btn);
+      }
+
+      // Traditional Rantai Beskap (Curved gold watch chain & pocket emblem)
+      const chainArc = new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.007, 6, 16, Math.PI), accentMat);
+      chainArc.rotation.z = Math.PI;
+      chainArc.position.set(0.09, 0.61, 0.222);
+      torsoGroup.add(chainArc);
+
+      const emblem = new THREE.Mesh(new THREE.DodecahedronGeometry(0.028), accentMat);
+      emblem.position.set(0.14, 0.67, 0.222);
+      torsoGroup.add(emblem);
+    } else if (outfit === 'kebaya_putih') {
+      // Elegant White Kebaya with Kutubaru center lace panel, delicate V neckline & gold brooch
+      const whiteLaceMat = new THREE.MeshStandardMaterial({ color: '#fcfaf4', roughness: 0.58 });
+      const kutubaruPanel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.50, 0.032), whiteLaceMat);
+      kutubaruPanel.position.set(0, 0.58, 0.202);
+      torsoGroup.add(kutubaruPanel);
+
+      // Scalloped kebaya lower flare hem over batik jarik
+      const kebayaHem = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.30, 0.18, 18), whiteLaceMat);
+      kebayaHem.scale.set(1.18, 1.0, 0.88);
+      kebayaHem.position.set(0, 0.24, 0);
+      torsoGroup.add(kebayaHem);
+
+      // Delicate V-collar framing
+      const vTrimL = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.30, 0.028), accentMat);
+      vTrimL.rotation.z = -0.28;
+      vTrimL.position.set(-0.08, 0.72, 0.205);
+      torsoGroup.add(vTrimL);
+
+      const vTrimR = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.30, 0.028), accentMat);
+      vTrimR.rotation.z = 0.28;
+      vTrimR.position.set(0.08, 0.72, 0.205);
+      torsoGroup.add(vTrimR);
+
+      // Signature Gold Bros Kutubaru (3-tier chest brooch)
+      for (let k = 0; k < 3; k++) {
+        const bros = new THREE.Mesh(new THREE.DodecahedronGeometry(0.026 - k * 0.004), accentMat);
+        bros.position.set(0, 0.68 - k * 0.08, 0.226);
+        torsoGroup.add(bros);
+      }
     } else {
       // Traditional Royal Wedding Beskap / Kebaya
-      // High Mandarin Embroidered Standing Collar
       const collarGeo = new THREE.CylinderGeometry(0.115, 0.13, 0.10, 16);
       collarGeo.scale(1.1, 1.0, 0.9);
       const collar = new THREE.Mesh(collarGeo, accentMat);
       collar.position.set(0, 0.86, 0);
       torsoGroup.add(collar);
 
-      // Gold Embroidered Central Placket (Sash / Bordir)
       const placketGeo = new THREE.BoxGeometry(0.065, 0.54, 0.035);
       const placket = new THREE.Mesh(placketGeo, accentMat);
       placket.position.set(0, 0.60, 0.20);
       torsoGroup.add(placket);
 
-      // Royal Gold Buttons / Kancing Emas
       const btnMat = new THREE.MeshStandardMaterial({ color: '#f4c542', metalness: 0.95, roughness: 0.2 });
       for (let b = 0; b < 4; b++) {
         const btnGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.018, 10);
@@ -327,14 +570,19 @@ export class Avatar3D {
         torsoGroup.add(btn);
       }
 
-      // Traditional Keris / Brooch Hanging Chain
       const broochGeo = new THREE.DodecahedronGeometry(0.038);
       const brooch = new THREE.Mesh(broochGeo, accentMat);
       brooch.position.set(0.12, 0.70, 0.21);
       torsoGroup.add(brooch);
     }
 
-    // E. Clavicle & Neck Connection
+    // E. Clavicle, Trapezius Slope & Neck Connection
+    const trapGeo = new THREE.SphereGeometry(0.16, 14, 10);
+    trapGeo.scale(1.85, 0.42, 0.95);
+    const trapezius = new THREE.Mesh(trapGeo, fabricMat);
+    trapezius.position.set(0, 0.83, -0.01);
+    torsoGroup.add(trapezius);
+
     const neckGeo = new THREE.CylinderGeometry(0.072, 0.088, 0.22, 18);
     const neck = new THREE.Mesh(neckGeo, skinMat);
     neck.position.set(0, 0.98, 0);
@@ -399,28 +647,30 @@ export class Avatar3D {
   buildRealisticHand(isLeft, skinMat) {
     const handGroup = new THREE.Group();
 
-    // 1. Palm (Contoured trapezoid with thenar thumb prominence)
-    const palmGeo = new THREE.BoxGeometry(0.072, 0.082, 0.034);
+    // 1. Palm (Organic contoured ellipsoid with natural metacarpal fullness)
+    const palmGeo = new THREE.SphereGeometry(0.044, 14, 12);
+    palmGeo.scale(0.92, 1.05, 0.42);
     const palm = new THREE.Mesh(palmGeo, skinMat);
     palm.position.set(0, -0.041, 0);
     handGroup.add(palm);
 
     // 2. Thumb (Opposable, angled anteriorly & medially)
     const thumbGroup = new THREE.Group();
-    const thumbX = isLeft ? 0.034 : -0.034;
-    thumbGroup.position.set(thumbX, -0.028, 0.014);
+    const thumbX = isLeft ? 0.032 : -0.032;
+    thumbGroup.position.set(thumbX, -0.028, 0.013);
     thumbGroup.rotation.y = isLeft ? 0.45 : -0.45;
     thumbGroup.rotation.z = isLeft ? -0.35 : 0.35;
 
-    const thumbGeo = new THREE.CylinderGeometry(0.014, 0.013, 0.052, 8);
+    const thumbGeo = new THREE.CylinderGeometry(0.0135, 0.0115, 0.052, 8);
     const thumbMesh = new THREE.Mesh(thumbGeo, skinMat);
     thumbMesh.position.y = -0.025;
     thumbGroup.add(thumbMesh);
     handGroup.add(thumbGroup);
 
-    // 3. Four Articulate Fingers (Index, Middle, Ring, Pinky)
+    // 3. Four Articulate Fingers + Knuckles (Index, Middle, Ring, Pinky)
     const fingerLengths = [0.058, 0.064, 0.060, 0.048];
     const fingerRadii = [0.011, 0.0115, 0.011, 0.0095];
+    const knuckleGeo = new THREE.SphereGeometry(0.0115, 8, 6);
 
     for (let f = 0; f < 4; f++) {
       const fingerIdx = isLeft ? f : 3 - f;
@@ -428,11 +678,15 @@ export class Avatar3D {
       const len = fingerLengths[fingerIdx];
       const rad = fingerRadii[fingerIdx];
 
+      const knuckle = new THREE.Mesh(knuckleGeo, skinMat);
+      knuckle.position.set(fx, -0.078, 0.002);
+      handGroup.add(knuckle);
+
       const fingerGroup = new THREE.Group();
-      fingerGroup.position.set(fx, -0.082, 0);
+      fingerGroup.position.set(fx, -0.080, 0);
       fingerGroup.rotation.x = 0.22 + f * 0.05;
 
-      const fingerGeo = new THREE.CylinderGeometry(rad * 0.9, rad, len, 8);
+      const fingerGeo = new THREE.CylinderGeometry(rad * 0.85, rad, len, 8);
       const fingerMesh = new THREE.Mesh(fingerGeo, skinMat);
       fingerMesh.position.y = -len / 2;
       fingerGroup.add(fingerMesh);
@@ -480,11 +734,17 @@ export class Avatar3D {
     headGroup.add(leftCheek);
     headGroup.add(rightCheek);
 
-    // Defined Brow Ridge (Overhang above eye sockets)
-    const browGeo = new THREE.BoxGeometry(0.24, 0.024, 0.04);
-    const brow = new THREE.Mesh(browGeo, skinMat);
-    brow.position.set(0, 0.075, 0.17);
-    headGroup.add(brow);
+    // Sculpted Arched Brow Ridges (Smooth anatomical supraorbital curve)
+    const browRidgeGeo = new THREE.SphereGeometry(0.042, 10, 8);
+    browRidgeGeo.scale(1.35, 0.32, 0.55);
+    const leftBrowRidge = new THREE.Mesh(browRidgeGeo, skinMat);
+    leftBrowRidge.rotation.z = -0.08;
+    leftBrowRidge.position.set(-0.068, 0.074, 0.168);
+    const rightBrowRidge = new THREE.Mesh(browRidgeGeo, skinMat);
+    rightBrowRidge.rotation.z = 0.08;
+    rightBrowRidge.position.set(0.068, 0.074, 0.168);
+    headGroup.add(leftBrowRidge);
+    headGroup.add(rightBrowRidge);
 
     // B. Realistic Almond Eyes
     this.buildRealisticEyes(headGroup, hairCol);
@@ -552,21 +812,21 @@ export class Avatar3D {
     rightUpperLid.position.set(0.072, 0.048, 0.172);
     headGroup.add(rightUpperLid);
 
-    // Sculpted Eyebrows matching hair color
+    // Sculpted Arched Eyebrows matching hair color
     const browMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(hairCol),
-      roughness: 0.8,
+      roughness: 0.78,
     });
-    const browMeshGeo = new THREE.BoxGeometry(0.068, 0.014, 0.018);
+    const browMeshGeo = new THREE.CapsuleGeometry(0.007, 0.050, 4, 8);
 
     const leftBrow = new THREE.Mesh(browMeshGeo, browMat);
-    leftBrow.rotation.z = -0.06;
-    leftBrow.position.set(-0.074, 0.072, 0.182);
+    leftBrow.rotation.z = Math.PI / 2 - 0.08;
+    leftBrow.position.set(-0.074, 0.072, 0.180);
     headGroup.add(leftBrow);
 
     const rightBrow = new THREE.Mesh(browMeshGeo, browMat);
-    rightBrow.rotation.z = 0.06;
-    rightBrow.position.set(0.074, 0.072, 0.182);
+    rightBrow.rotation.z = Math.PI / 2 + 0.08;
+    rightBrow.position.set(0.074, 0.072, 0.180);
     headGroup.add(rightBrow);
   }
 

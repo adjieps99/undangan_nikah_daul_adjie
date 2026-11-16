@@ -5,37 +5,37 @@
 
 export const AVATAR_OPTIONS = {
   skinColors: [
-    { label: 'Warm Sand', value: '#F1C27D' },
-    { label: 'Golden Tan', value: '#E0AC69' },
-    { label: 'Fair Porcelain', value: '#FFDBAC' },
-    { label: 'Deep Bronze', value: '#8D5524' }
+    { label: 'Kuning Langsat', value: '#F1C27D' },
+    { label: 'Sawo Matang', value: '#E0AC69' },
+    { label: 'Cerah Natural', value: '#FFDBAC' },
+    { label: 'Sawo Gelap', value: '#8D5524' }
   ],
   hairStyles: [
-    { id: 'short', label: 'Short Pixel' },
-    { id: 'long', label: 'Long Waves' },
-    { id: 'bun', label: 'Top Bun' },
-    { id: 'wavy', label: 'Side Sweep' },
-    { id: 'hijab', label: 'Elegant Hijab' },
-    { id: 'cap', label: 'Traditional Cap' }
+    { id: 'short', label: 'Pendek Rapi' },
+    { id: 'long', label: 'Panjang Terurai' },
+    { id: 'bun', label: 'Sanggul Simpel' },
+    { id: 'wavy', label: 'Berombak' },
+    { id: 'hijab', label: 'Hijab Anggun' },
+    { id: 'cap', label: 'Peci Hitam' }
   ],
   hairColors: [
-    { label: 'Midnight Black', value: '#1A1A24' },
-    { label: 'Dark Chocolate', value: '#3D2314' },
-    { label: 'Golden Blonde', value: '#C68B59' },
-    { label: 'Burgundy', value: '#6B1D2F' },
-    { label: 'Soft White', value: '#EAEAEA' }
+    { label: 'Hitam Alami', value: '#1A1A24' },
+    { label: 'Cokelat Tua', value: '#3D2314' },
+    { label: 'Cokelat Keemasan', value: '#C68B59' },
+    { label: 'Merah Anggur', value: '#6B1D2F' },
+    { label: 'Perak Lembut', value: '#EAEAEA' }
   ],
   outfits: [
-    { id: 'traditional_gold', label: 'Batik Gold' },
-    { id: 'traditional_maroon', label: 'Kebaya Maroon' },
-    { id: 'tuxedo', label: 'Black Tuxedo' },
-    { id: 'dress', label: 'Bridal Gown' }
+    { id: 'traditional_gold', label: 'Batik Emas' },
+    { id: 'traditional_maroon', label: 'Kebaya Marun' },
+    { id: 'beskap_hitam', label: 'Beskap Hitam' },
+    { id: 'kebaya_putih', label: 'Kebaya Putih' }
   ],
   accessories: [
-    { id: 'none', label: 'None' },
-    { id: 'glasses', label: 'Retro Glasses' },
-    { id: 'flower', label: 'Jasmine Flower' },
-    { id: 'crown', label: 'Gold Crown' }
+    { id: 'none', label: 'Tanpa Aksesoris' },
+    { id: 'glasses', label: 'Kacamata' },
+    { id: 'flower', label: 'Bunga Melati' },
+    { id: 'crown', label: 'Mahkota Kecil' }
   ]
 };
 
@@ -92,21 +92,31 @@ function renderOutfitLayer(outfit) {
         <rect x="7" y="16" width="3" height="7" fill="#8B0000" />
         <rect x="22" y="16" width="3" height="7" fill="#8B0000" />
       `;
+    case 'beskap_hitam':
     case 'tuxedo':
       return `
-        <rect x="9" y="15" width="14" height="10" fill="#1C1C24" />
-        <polygon points="13,15 19,15 16,21" fill="#FFFFFF" />
-        <rect x="15" y="17" width="2" height="2" fill="#8B0000" /> <!-- Bowtie -->
-        <rect x="7" y="16" width="3" height="7" fill="#1C1C24" />
-        <rect x="22" y="16" width="3" height="7" fill="#1C1C24" />
+        <rect x="9" y="15" width="14" height="10" fill="#15151B" />
+        <rect x="13" y="14" width="6" height="2" fill="#1E1E26" />
+        <rect x="15" y="16" width="2" height="8" fill="#23232D" />
+        <rect x="15" y="17" width="1" height="1" fill="#D4AF37" />
+        <rect x="15" y="20" width="1" height="1" fill="#D4AF37" />
+        <rect x="16" y="18" width="4" height="1" fill="#D4AF37" />
+        <rect x="19" y="19" width="1" height="2" fill="#D4AF37" />
+        <rect x="7" y="16" width="3" height="7" fill="#15151B" />
+        <rect x="22" y="16" width="3" height="7" fill="#15151B" />
       `;
+    case 'kebaya_putih':
     case 'dress':
       return `
-        <rect x="8" y="15" width="16" height="13" fill="#F8F9FA" />
-        <rect x="11" y="15" width="10" height="4" fill="#E2E8F0" />
-        <rect x="7" y="16" width="3" height="6" fill="#F8F9FA" />
-        <rect x="22" y="16" width="3" height="6" fill="#F8F9FA" />
-        <rect x="6" y="25" width="20" height="3" fill="#E2E8F0" />
+        <rect x="9" y="15" width="14" height="9" fill="#FAF8F3" />
+        <rect x="13" y="15" width="6" height="9" fill="#EFEAE0" />
+        <rect x="15" y="16" width="2" height="6" fill="#FFFFFF" />
+        <rect x="7" y="16" width="3" height="7" fill="#F4F0E8" />
+        <rect x="22" y="16" width="3" height="7" fill="#F4F0E8" />
+        <rect x="9" y="24" width="14" height="5" fill="#5A3A24" />
+        <rect x="11" y="25" width="2" height="3" fill="#C9A255" />
+        <rect x="15" y="25" width="2" height="3" fill="#C9A255" />
+        <rect x="19" y="25" width="2" height="3" fill="#C9A255" />
       `;
     case 'traditional_gold':
     default:

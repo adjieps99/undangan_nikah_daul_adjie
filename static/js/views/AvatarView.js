@@ -21,8 +21,8 @@ export class AvatarView {
     const header = document.createElement('div');
     header.className = 'avatar-header';
     header.innerHTML = `
-      <h2 class="retro-sub-title" style="letter-spacing: 1.5px; font-size: 16px;">DESAIN AVATAR KAMU DULU, YUK!</h2>
-      <p style="font-size: 11px; color: #ffbe97; margin-top: 4px;">Pilih penampilan terbaikmu untuk menjelajahi kebun pernikahan Adjie &amp; Daulika</p>
+      <h2 class="retro-sub-title" style="letter-spacing: 1px; font-size: 16px;">Desain avatar kamu dulu, yuk!</h2>
+      <p style="font-size: 11px; color: #ffbe97; margin-top: 6px;">Pilih tampilan yang paling kamu suka sebelum kita masuk ke taman.</p>
     `;
     this.container.appendChild(header);
 
@@ -46,7 +46,7 @@ export class AvatarView {
 
     // Randomize Button
     const randBtn = createRetroButton({
-      text: '🎲 ACAK GAYA',
+      text: '🎲 Acak Gaya',
       variant: 'secondary',
       className: 'avatar-rand-btn',
       onClick: () => {
@@ -98,9 +98,15 @@ export class AvatarView {
     // Footer Actions
     const actionsRow = document.createElement('div');
     actionsRow.className = 'avatar-actions-row';
+    actionsRow.style.textAlign = 'center';
+
+    const readyPrompt = document.createElement('p');
+    readyPrompt.style.cssText = 'font-size: 10.5px; color: #f5eedc; margin-bottom: 8px; opacity: 0.9;';
+    readyPrompt.textContent = 'Kalau sudah cocok, kita lanjut, yuk!';
+    actionsRow.appendChild(readyPrompt);
 
     const confirmBtn = createRetroButton({
-      text: 'MASUK KE GARDEN 🌸',
+      text: 'Lanjut ke taman kami →',
       onClick: () => {
         if (typeof this.onConfirm === 'function') {
           this.onConfirm();
@@ -137,12 +143,13 @@ export class AvatarView {
       // Style Selector
       const styleGroup = document.createElement('div');
       styleGroup.className = 'option-group';
-      styleGroup.innerHTML = '<label>Hair Style</label>';
+      styleGroup.innerHTML = '<label>Gaya Rambut</label>';
       const styleGrid = document.createElement('div');
       styleGrid.className = 'options-pill-grid';
 
       AVATAR_OPTIONS.hairStyles.forEach(style => {
         const pill = document.createElement('button');
+        pill.type = 'button';
         pill.className = `option-pill ${config.hairStyle === style.id ? 'selected' : ''}`;
         pill.innerText = style.label;
         pill.addEventListener('click', () => {
@@ -158,7 +165,7 @@ export class AvatarView {
       const colorGroup = document.createElement('div');
       colorGroup.className = 'option-group';
       colorGroup.style.marginTop = '12px';
-      colorGroup.innerHTML = '<label>Hair Color</label>';
+      colorGroup.innerHTML = '<label>Warna Rambut</label>';
       const colorGrid = document.createElement('div');
       colorGrid.className = 'options-swatch-grid';
 

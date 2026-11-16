@@ -9,62 +9,59 @@ export function createProfileModal() {
   const groom = WEDDING_DATA.couple.groom;
   const bride = WEDDING_DATA.couple.bride;
 
-  // Custom configurations for avatar previews matching wedding attire
-  // Groom in black beskap, Bride in white kebaya with natural hair
-  const groomAvatarConfig = {
+  // Groom in proper black beskap; Bride in elegant white kebaya with black natural hair (no hijab)
+  const groomAvatarConfig = groom.avatarConfig || {
     gender: 'male',
     skinColor: '#F1C27D',
     hairStyle: 'short',
     hairColor: '#1A1A24',
-    outfit: 'tuxedo', // Rendered with black beskap styling
+    outfit: 'beskap_hitam',
     accessory: 'none'
   };
 
-  const brideAvatarConfig = {
+  const brideAvatarConfig = bride.avatarConfig || {
     gender: 'female',
     skinColor: '#FFDBAC',
-    hairStyle: 'long', // Natural hair
+    hairStyle: 'long',
     hairColor: '#1A1A24',
-    outfit: 'dress', // White kebaya & dress
+    outfit: 'kebaya_putih',
     accessory: 'flower'
   };
 
   content.innerHTML = `
-    <!-- Top Date Banner -->
-    <div style="text-align: center; margin-bottom: 16px; padding: 8px 14px; background: rgba(212, 175, 55, 0.12); border: 1px solid rgba(212, 175, 55, 0.35); border-radius: 8px;">
-      <span style="font-size: 11px; letter-spacing: 1.5px; color: var(--color-gold); font-weight: bold;">
-        🗓️ HARI BAHAGIA KAMI: SABTU, 5 DESEMBER 2026
+    <div style="text-align: center; margin-bottom: 16px;">
+      <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
+        ADJIE &amp; DAULIKA
       </span>
+      <p style="font-size: 11px; color: #ffbe97; margin: 6px 0 0; line-height: 1.45;">
+        Dengan memohon rahmat dan ridho Tuhan Yang Maha Esa, izinkan kami memperkenalkan diri.
+      </p>
     </div>
 
-    <!-- Couple Profiles Grid (Groom in Black Beskap, Bride in White Kebaya) -->
     <div class="couple-profiles-grid" style="display: flex; gap: 14px; align-items: stretch; justify-content: center; flex-wrap: wrap;">
       <!-- Groom Profile -->
       <div class="profile-card" style="
         flex: 1;
         min-width: 200px;
         background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(212, 175, 55, 0.3);
+        border: 1px solid rgba(212, 175, 55, 0.35);
         border-radius: 10px;
-        padding: 16px 12px;
+        padding: 18px 14px;
         text-align: center;
       ">
-        <div class="profile-avatar" style="margin-bottom: 8px;">
-          ${generateAvatarSVG(groomAvatarConfig, 80)}
+        <div class="profile-avatar" style="margin-bottom: 10px;">
+          ${generateAvatarSVG(groomAvatarConfig, 84)}
         </div>
-        <div style="font-size: 9px; letter-spacing: 1px; color: var(--color-gold); font-weight: bold; margin-bottom: 2px;">
+        <div style="font-size: 9.5px; letter-spacing: 1px; color: var(--color-gold); font-weight: bold; margin-bottom: 4px;">
           MEMPELAI PRIA
         </div>
-        <h4 class="profile-name" style="font-size: 14px; color: #fff; margin-bottom: 4px;">${groom.fullName}</h4>
-        <div style="font-size: 10px; color: #ffbe97; font-weight: 600; margin-bottom: 8px; line-height: 1.35;">
+        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 15px; color: #fff; margin-bottom: 6px;">${groom.fullName}</h4>
+        <div style="font-size: 11px; color: #f5eedc; line-height: 1.5; margin-bottom: 8px;">
           ${groom.parents}
         </div>
-        <div style="font-size: 9px; color: #aaa; margin-bottom: 6px;">
-          👔 Balutan Beskap Hitam Klasik
+        <div style="font-size: 10px; color: #ffbe97;">
+          ${groom.attireLabel || 'Beskap Hitam Klasik'}
         </div>
-        <p style="font-size: 11px; color: #e8e0d5; line-height: 1.45; font-style: italic;">
-          "${groom.bio}"
-        </p>
       </div>
 
       <!-- Bride Profile -->
@@ -72,48 +69,58 @@ export function createProfileModal() {
         flex: 1;
         min-width: 200px;
         background: rgba(255,255,255,0.05);
-        border: 1px solid rgba(212, 175, 55, 0.3);
+        border: 1px solid rgba(212, 175, 55, 0.35);
         border-radius: 10px;
-        padding: 16px 12px;
+        padding: 18px 14px;
         text-align: center;
       ">
-        <div class="profile-avatar" style="margin-bottom: 8px;">
-          ${generateAvatarSVG(brideAvatarConfig, 80)}
+        <div class="profile-avatar" id="bride-avatar-slot" style="margin-bottom: 10px;">
+          ${generateAvatarSVG(brideAvatarConfig, 84)}
         </div>
-        <div style="font-size: 9px; letter-spacing: 1px; color: #ffb6c1; font-weight: bold; margin-bottom: 2px;">
+        <div style="font-size: 9.5px; letter-spacing: 1px; color: #ffb6c1; font-weight: bold; margin-bottom: 4px;">
           MEMPELAI WANITA
         </div>
-        <h4 class="profile-name" style="font-size: 14px; color: #fff; margin-bottom: 4px;">${bride.fullName}</h4>
-        <div style="font-size: 10px; color: #ffbe97; font-weight: 600; margin-bottom: 8px; line-height: 1.35;">
+        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 15px; color: #fff; margin-bottom: 6px;">${bride.fullName}</h4>
+        <div style="font-size: 11px; color: #f5eedc; line-height: 1.5; margin-bottom: 8px;">
           ${bride.parents}
         </div>
-        <div style="font-size: 9px; color: #aaa; margin-bottom: 6px;">
-          👗 Kebaya Putih Anggun & Rambut Terurai
+        <div style="font-size: 10px; color: #ffbe97;">
+          ${bride.attireLabel || 'Kebaya Putih Anggun'}
         </div>
-        <p style="font-size: 11px; color: #e8e0d5; line-height: 1.45; font-style: italic;">
-          "${bride.bio}"
-        </p>
       </div>
     </div>
-
-    <!-- Personal Quote Box -->
-    <div class="love-quote-box" style="
-      margin-top: 16px;
-      padding: 12px 14px;
-      background: rgba(212, 175, 55, 0.08);
-      border: 1px solid rgba(212, 175, 55, 0.25);
-      border-radius: 8px;
-      text-align: center;
-    ">
-      <p class="love-quote" style="font-family: var(--font-serif); font-size: 12px; font-style: italic; color: #ffecd2; margin: 0; line-height: 1.5;">
-        ${WEDDING_DATA.couple.quote}
-      </p>
-    </div>
   `;
+
+  // Hydrate real portraits automatically if uploaded to /static/images/couple/
+  import('../../config/assetManifest.js')
+    .then(({ ASSET_MANIFEST, fetchAssetStatus }) =>
+      fetchAssetStatus().then((status) => ({ ASSET_MANIFEST, status }))
+    )
+    .then(({ ASSET_MANIFEST, status }) => {
+      if (!status || !status.images || !status.images.couple) return;
+      const cards = content.querySelectorAll('.profile-avatar');
+      if (status.images.couple['adjie.jpg'] && cards[0]) {
+        const img = document.createElement('img');
+        img.src = ASSET_MANIFEST.images.couple.groomPortrait.url;
+        img.alt = groom.fullName;
+        img.style.cssText = 'width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 2px solid var(--color-gold);';
+        cards[0].innerHTML = '';
+        cards[0].appendChild(img);
+      }
+      if (status.images.couple['daulika.jpg'] && cards[1]) {
+        const img = document.createElement('img');
+        img.src = ASSET_MANIFEST.images.couple.bridePortrait.url;
+        img.alt = bride.fullName;
+        img.style.cssText = 'width: 84px; height: 84px; border-radius: 50%; object-fit: cover; border: 2px solid #ffb6c1;';
+        cards[1].innerHTML = '';
+        cards[1].appendChild(img);
+      }
+    })
+    .catch(() => {});
 
   return createModal({
     id: 'profile-modal',
     title: '💍 PROFIL KAMI',
-    content: content
+    content
   });
 }

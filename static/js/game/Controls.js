@@ -13,12 +13,14 @@ export class Controls {
     this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
     this.isJoystickActive = false;
     this.touchId = null;
+    this._windowCleanups = [];
+    this._jumpTimeoutId = null;
 
     this.setupKeyboardListeners();
   }
 
   setupKeyboardListeners() {
-    window.addEventListener('keydown', (e) => {
+    this._onKeyDown = (e) => {
       switch (e.key.toLowerCase()) {
         case 'w':
         case 'arrowup':
@@ -43,9 +45,9 @@ export class Controls {
           this.keys.jump = true;
           break;
       }
-    });
+    };
 
-    window.addEventListener('keyup', (e) => {
+    this._onKeyUp = (e) => {
       switch (e.key.toLowerCase()) {
         case 'w':
         case 'arrowup':
@@ -70,6 +72,21 @@ export class Controls {
           this.keys.jump = false;
           break;
       }
+    };
+
+    this._onBlur = () => {
+      this.keys = { up: false, down: false, left: false, right: false, interact: false, jump: false };
+      this.isJoystickActive = false;
+      this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
+    };
+
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('blur', this._onBlur);
+    this._windowCleanups.push(() => {
+      window.removeEventListener('keydown', this._onKeyDown);
+      window.removeEventListener('keyup', this._onKeyUp);
+      window.removeEventListener('blur', this._onBlur);
     });
   }
 
@@ -116,8 +133,8 @@ export class Controls {
     const handleMove = (clientX, clientY) => {
       if (!this.isJoystickActive) return;
 
-      let deltaX = clientX - baseCenter.x;
-      let deltaY = clientY - baseCenter.y;
+      const deltaX = clientX - baseCenter.x;
+      const deltaY = clientY - baseCenter.y;
       const distance = Math.hypot(deltaX, deltaY);
 
       // Clamp thumb movement within maxRadius
@@ -134,7 +151,7 @@ export class Controls {
       this.joystickVector = {
         dx: distance > 5 ? Math.cos(angle) : 0,
         dy: distance > 5 ? Math.sin(angle) : 0,
-        intensity: intensity
+        intensity
       };
     };
 
@@ -144,7 +161,7 @@ export class Controls {
       joystickBase.classList.remove('active');
       joystickBase.classList.add('idle');
 
-      joystickThumb.style.transform = `translate(0px, 0px)`;
+      joystickThumb.style.transform = 'translate(0px, 0px)';
       this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
     };
 
@@ -156,7 +173,7 @@ export class Controls {
       handleStart(touch.clientX, touch.clientY, touch.identifier);
     }, { passive: false });
 
-    window.addEventListener('touchmove', (e) => {
+    const onTouchMove = (e) => {
       if (!this.isJoystickActive) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
         if (e.changedTouches[i].identifier === this.touchId) {
@@ -164,9 +181,9 @@ export class Controls {
           break;
         }
       }
-    }, { passive: true });
+    };
 
-    window.addEventListener('touchend', (e) => {
+    const onTouchEnd = (e) => {
       if (!this.isJoystickActive) return;
       for (let i = 0; i < e.changedTouches.length; i++) {
         if (e.changedTouches[i].identifier === this.touchId) {
@@ -174,11 +191,15 @@ export class Controls {
           break;
         }
       }
-    }, { passive: true });
+    };
 
-    window.addEventListener('touchcancel', (e) => {
+    const onTouchCancel = () => {
       if (this.isJoystickActive) handleEnd();
-    }, { passive: true });
+    };
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchCancel, { passive: true });
 
     // Mouse Fallback for testing in Browser DevTools
     let isMouseDown = false;
@@ -187,15 +208,26 @@ export class Controls {
       handleStart(e.clientX, e.clientY);
     });
 
-    window.addEventListener('mousemove', (e) => {
+    const onMouseMove = (e) => {
       if (isMouseDown) handleMove(e.clientX, e.clientY);
-    });
+    };
 
-    window.addEventListener('mouseup', () => {
+    const onMouseUp = () => {
       if (isMouseDown) {
         isMouseDown = false;
         handleEnd();
       }
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
+    this._windowCleanups.push(() => {
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchCancel);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
     });
 
     // 2. Action Buttons Group (Bottom Right)
@@ -204,12 +236,14 @@ export class Controls {
 
     // Jump Button
     const jumpBtn = document.createElement('button');
+    jumpBtn.type = 'button';
     jumpBtn.className = 'virtual-btn virtual-jump-btn';
-    jumpBtn.innerHTML = '<span>🦘</span><label>JUMP</label>';
+    jumpBtn.innerHTML = '<span>🦘</span><label>LOMPAT</label>';
 
     const triggerJump = () => {
       this.keys.jump = true;
-      setTimeout(() => { this.keys.jump = false; }, 150);
+      if (this._jumpTimeoutId) clearTimeout(this._jumpTimeoutId);
+      this._jumpTimeoutId = setTimeout(() => { this.keys.jump = false; }, 150);
       window.dispatchEvent(new CustomEvent('player-jump'));
     };
 
@@ -219,8 +253,9 @@ export class Controls {
 
     // Action / Interact Button
     const interactBtn = document.createElement('button');
+    interactBtn.type = 'button';
     interactBtn.className = 'virtual-btn virtual-action-btn';
-    interactBtn.innerHTML = '<span>✨</span><label>ACTION</label>';
+    interactBtn.innerHTML = '<span>✨</span><label>BUKA</label>';
 
     interactBtn.addEventListener('touchstart', (e) => { e.preventDefault(); this.triggerInteract(); });
     interactBtn.addEventListener('click', (e) => { e.preventDefault(); this.triggerInteract(); });
@@ -232,6 +267,20 @@ export class Controls {
 
   triggerInteract() {
     window.dispatchEvent(new CustomEvent('player-interact'));
+  }
+
+  destroy() {
+    if (this._jumpTimeoutId) {
+      clearTimeout(this._jumpTimeoutId);
+      this._jumpTimeoutId = null;
+    }
+    while (this._windowCleanups.length > 0) {
+      const cleanup = this._windowCleanups.pop();
+      try { cleanup(); } catch {}
+    }
+    this.isJoystickActive = false;
+    this.touchId = null;
+    this.joystickVector = { dx: 0, dy: 0, intensity: 0 };
   }
 
   getMovementVector() {

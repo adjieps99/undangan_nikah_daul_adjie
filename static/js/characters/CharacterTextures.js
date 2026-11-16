@@ -188,6 +188,21 @@ class CharacterTextureFactory {
       petalBg = '#7a1b2d';
       goldAccent = '#e6be58';
       innerCore = '#26040c';
+    } else if (outfitType === 'beskap_hitam') {
+      baseBg = '#121216';
+      petalBg = '#1c1c23';
+      goldAccent = '#d4af37';
+      innerCore = '#0a0a0d';
+    } else if (outfitType === 'kebaya_putih') {
+      baseBg = '#f8f6f0';
+      petalBg = '#ece6d8';
+      goldAccent = '#e3d5b8';
+      innerCore = '#ffffff';
+    } else if (outfitType === 'batik_jarik') {
+      baseBg = '#2c1b10';
+      petalBg = '#8c5a2b';
+      goldAccent = '#d9b25f';
+      innerCore = '#1a0e07';
     } else if (outfitType === 'tuxedo') {
       baseBg = '#141419';
       petalBg = '#1f1f26';
@@ -205,7 +220,7 @@ class CharacterTextureFactory {
     ctx.fillRect(0, 0, 256, 256);
 
     // Micro fabric twill weave lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = outfitType === 'kebaya_putih' ? 'rgba(180, 165, 140, 0.14)' : 'rgba(255, 255, 255, 0.05)';
     ctx.lineWidth = 1;
     for (let y = 0; y < 256; y += 4) {
       ctx.beginPath();
@@ -214,7 +229,7 @@ class CharacterTextureFactory {
       ctx.stroke();
     }
 
-    if (outfitType.startsWith('traditional')) {
+    if (outfitType.startsWith('traditional') || outfitType === 'batik_jarik') {
       // 2. Indonesian Traditional Kawung Pattern Grid (4 interlocking ellipse petals)
       const step = 64;
       for (let x = 0; x <= 256; x += step) {
@@ -222,24 +237,20 @@ class CharacterTextureFactory {
           ctx.save();
           ctx.translate(x, y);
 
-          // 4 Oval Petals in Kawung formation
           for (let rot = 0; rot < 4; rot++) {
             ctx.save();
             ctx.rotate((rot * Math.PI) / 2);
 
-            // Outer Petal
             ctx.fillStyle = petalBg;
             ctx.beginPath();
             ctx.ellipse(0, 22, 11, 20, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Inner Gold Foil Inlay
             ctx.fillStyle = goldAccent;
             ctx.beginPath();
             ctx.ellipse(0, 22, 5, 12, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            // Core dot
             ctx.fillStyle = innerCore;
             ctx.beginPath();
             ctx.arc(0, 22, 2.5, 0, Math.PI * 2);
@@ -248,7 +259,6 @@ class CharacterTextureFactory {
             ctx.restore();
           }
 
-          // Center Intersection Gold Diamond
           ctx.fillStyle = goldAccent;
           ctx.beginPath();
           ctx.moveTo(0, -9);
@@ -258,13 +268,40 @@ class CharacterTextureFactory {
           ctx.closePath();
           ctx.fill();
 
-          // Center Ruby/Garnet Core
           ctx.fillStyle = innerCore;
           ctx.beginPath();
           ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.restore();
+        }
+      }
+    } else if (outfitType === 'beskap_hitam') {
+      // Fine jet-black Javanese velvet/silk diagonal sheen weave
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+      ctx.lineWidth = 1;
+      for (let x = -256; x < 512; x += 10) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x + 128, 256);
+        ctx.stroke();
+      }
+    } else if (outfitType === 'kebaya_putih') {
+      // Ivory-white Indonesian Kebaya floral brocade & embroidered lace motifs
+      ctx.strokeStyle = 'rgba(210, 198, 174, 0.65)';
+      ctx.lineWidth = 1.2;
+      for (let x = 24; x < 256; x += 48) {
+        for (let y = 24; y < 256; y += 48) {
+          for (let p = 0; p < 6; p++) {
+            const a = (p * Math.PI * 2) / 6;
+            ctx.beginPath();
+            ctx.arc(x + Math.cos(a) * 9, y + Math.sin(a) * 9, 4.5, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
         }
       }
     } else if (outfitType === 'tuxedo') {

@@ -27,7 +27,7 @@ export function createRSVPModal() {
         font-weight: bold;
         color: #ffffff;
         margin-top: 4px;
-      ">${state.guestName || 'Tamu Undangan'}</div>
+      "></div>
       
       <!-- Invitation Category Badge -->
       <div style="
@@ -146,6 +146,11 @@ export function createRSVPModal() {
     <div id="rsvp-result-box" style="display: none; padding: 12px; border-radius: 8px; margin-bottom: 14px; text-align: center; font-size: 11.5px; line-height: 1.4;"></div>
   `;
 
+  const guestNameDisplay = content.querySelector('#rsvp-guest-name-display');
+  if (guestNameDisplay) {
+    guestNameDisplay.textContent = state.guestName || 'Tamu Undangan';
+  }
+
   const btnYes = content.querySelector('#rsvp-yes');
   const btnNo = content.querySelector('#rsvp-no');
   const detailsYes = content.querySelector('#rsvp-details-yes');
@@ -171,7 +176,7 @@ export function createRSVPModal() {
 
   // Action Submit Button
   const submitBtn = createRetroButton({
-    text: '💾 SIMPAN KONFIRMASI RSVP',
+    text: '💾 Simpan konfirmasi',
     onClick: async () => {
       let finalCount = 0;
       if (attending) {
@@ -179,13 +184,13 @@ export function createRSVPModal() {
       }
 
       submitBtn.disabled = true;
-      submitBtn.innerText = '⏳ MENYIMPAN KONFIRMASI...';
+      submitBtn.innerText = '⏳ Menyimpan...';
 
       const payload = {
         guest_name: state.guestName,
         attending: attending ? 1 : 0,
         guest_count: finalCount,
-        group_category: category
+        invitation_category: category
       };
 
       try {

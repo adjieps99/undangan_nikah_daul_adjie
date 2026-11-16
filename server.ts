@@ -4,6 +4,13 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
+import {
+  validateRsvpPayload,
+  getMaxGuestQuota,
+  normalizeInvitationCategory,
+  normalizeGuestGroup,
+  sanitizeGuestText,
+} from './static/js/utils/rsvpContract.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -72,7 +79,9 @@ interface RSVP {
   guest_name: string;
   attending: number;
   guest_count: number;
+  invitation_category: 'A' | 'B';
   group_category?: string | null;
+  invitation_identity?: string | null;
   notes?: string | null;
   created_at: string;
   updated_at: string;
@@ -170,6 +179,102 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // ==========================================
+// GALLERY ASSET DISCOVERY ENDPOINT
+// ==========================================
+const ALLOWED_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.avif']);
+
+app.get('/api/gallery', (_req: Request, res: Response) => {
+  const galleryDir = path.join(__dirname, 'static', 'images', 'gallery');
+  try {
+    if (!fs.existsSync(galleryDir)) {
+      return res.json({ status: 'ok', photos: [] });
+    }
+    let metadataMap: Record<string, { caption?: string; title?: string }> = {};
+    const metadataPath = path.join(galleryDir, 'gallery.json');
+    if (fs.existsSync(metadataPath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          metadataMap = parsed;
+        }
+      } catch {
+        // Ignore malformed optional gallery.json cleanly
+      }
+    }
+
+    const entries = fs.readdirSync(galleryDir, { withFileTypes: true });
+    const files = entries
+      .filter((entry) => entry.isFile() && ALLOWED_IMAGE_EXTS.has(path.extname(entry.name).toLowerCase()))
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+
+    const photos = files.map((filename, index) => {
+      const meta = metadataMap[filename];
+      const rawCaption = meta && typeof meta.caption === 'string' ? cleanText(meta.caption, 180) : '';
+      const rawTitle = meta && typeof meta.title === 'string' ? cleanText(meta.title, 80) : '';
+      return {
+        id: index + 1,
+        filename,
+        url: `/static/images/gallery/${encodeURIComponent(filename)}`,
+        ...(rawTitle ? { title: rawTitle } : {}),
+        ...(rawCaption ? { caption: rawCaption } : {}),
+      };
+    });
+
+    return res.json({ status: 'ok', photos });
+  } catch (err) {
+    console.warn('Could not scan gallery directory:', err);
+    return res.json({ status: 'ok', photos: [] });
+  }
+});
+
+// ==========================================
+// CENTRALIZED ASSET AVAILABILITY ENDPOINT
+// ==========================================
+app.get('/api/assets/status', (_req: Request, res: Response) => {
+  const tracksDir = path.join(__dirname, 'static', 'audio', 'tracks');
+  const audioDir = path.join(__dirname, 'static', 'audio');
+  const coupleDir = path.join(__dirname, 'static', 'images', 'couple');
+  const invitationDir = path.join(__dirname, 'static', 'images', 'invitation');
+  const modelsDir = path.join(__dirname, 'static', 'models', 'characters');
+
+  const checkFile = (dir: string, filename: string) => fs.existsSync(path.join(dir, filename));
+
+  const tracks: Record<string, boolean> = {
+    '01_langit_merah_muda.mp3': checkFile(tracksDir, '01_langit_merah_muda.mp3'),
+    '02_rona_merah_langit.mp3': checkFile(tracksDir, '02_rona_merah_langit.mp3'),
+    '03_ikat_aku_ditulang_belikatmu.mp3': checkFile(tracksDir, '03_ikat_aku_ditulang_belikatmu.mp3'),
+    '04_begini_begitu.mp3': checkFile(tracksDir, '04_begini_begitu.mp3'),
+    '05_just_you.mp3': checkFile(tracksDir, '05_just_you.mp3'),
+  };
+
+  return res.json({
+    status: 'ok',
+    audio: {
+      tracks,
+      voiceGreeting: checkFile(audioDir, 'couple_voice_greeting.mp3'),
+    },
+    images: {
+      couple: {
+        'adjie.jpg': checkFile(coupleDir, 'adjie.jpg'),
+        'daulika.jpg': checkFile(coupleDir, 'daulika.jpg'),
+        'couple.jpg': checkFile(coupleDir, 'couple.jpg'),
+      },
+      invitation: {
+        'cover_photo.jpg': checkFile(invitationDir, 'cover_photo.jpg'),
+      },
+    },
+    models: {
+      characters: {
+        'guest.glb': checkFile(modelsDir, 'guest.glb'),
+        'groom.glb': checkFile(modelsDir, 'groom.glb'),
+        'bride.glb': checkFile(modelsDir, 'bride.glb'),
+      },
+    },
+  });
+});
+
+// ==========================================
 // RSVP ENDPOINTS
 // ==========================================
 
@@ -182,41 +287,15 @@ app.post('/api/rsvp', (req: Request, res: Response) => {
     });
   }
 
-  const data = req.body;
-  if (!data || typeof data !== 'object') {
-    return res.status(400).json({ error: 'Bad Request', message: 'Invalid JSON payload' });
+  const validation = validateRsvpPayload(req.body);
+  if (!validation.valid) {
+    return res.status(validation.status).json({
+      error: validation.error,
+      message: validation.message,
+    });
   }
 
-  const guestName = cleanText(data.guest_name, 60);
-  if (!guestName) {
-    return res.status(422).json({ error: 'Validation Error', message: "Field 'guest_name' is required and cannot be empty." });
-  }
-
-  let attendingVal = data.attending;
-  if (attendingVal !== 0 && attendingVal !== 1 && attendingVal !== true && attendingVal !== false) {
-    return res.status(422).json({ error: 'Validation Error', message: "Field 'attending' must be 0 (No) or 1 (Yes)." });
-  }
-  const attending = (attendingVal === 1 || attendingVal === true) ? 1 : 0;
-
-  let guestCount = parseInt(data.guest_count ?? (attending ? 1 : 0), 10);
-  if (isNaN(guestCount)) {
-    return res.status(422).json({ error: 'Validation Error', message: "Field 'guest_count' must be an integer." });
-  }
-
-  if (attending === 1) {
-    if (guestCount < 1 || guestCount > 4) {
-      return res.status(422).json({ error: 'Validation Error', message: "When attending, 'guest_count' must be between 1 and 4." });
-    }
-  } else {
-    guestCount = 0;
-  }
-
-  const groupCategory = data.group_category;
-  if (groupCategory && groupCategory !== 'Keluarga' && groupCategory !== 'Teman') {
-    return res.status(422).json({ error: 'Validation Error', message: "Field 'group_category' must be 'Keluarga' or 'Teman'." });
-  }
-
-  const notes = data.notes ? cleanText(data.notes, 500) : null;
+  const normalized = validation.normalized;
   const { rawToken, tokenHash } = generateRsvpToken();
   const now = new Date().toISOString();
   const rsvpId = nextRsvpId++;
@@ -224,11 +303,13 @@ app.post('/api/rsvp', (req: Request, res: Response) => {
   const newRsvp: RSVP = {
     id: rsvpId,
     token_hash: tokenHash,
-    guest_name: guestName,
-    attending,
-    guest_count: guestCount,
-    group_category: groupCategory || null,
-    notes,
+    guest_name: normalized.guest_name,
+    attending: normalized.attending,
+    guest_count: normalized.guest_count,
+    invitation_category: normalized.invitation_category,
+    group_category: normalized.guest_group,
+    invitation_identity: normalized.invitation_identity,
+    notes: normalized.notes,
     created_at: now,
     updated_at: now,
   };
@@ -239,11 +320,13 @@ app.post('/api/rsvp', (req: Request, res: Response) => {
     status: 'ok',
     rsvp_id: rsvpId,
     rsvp_token: rawToken,
-    guest_name: guestName,
-    attending,
-    guest_count: guestCount,
-    group_category: groupCategory,
-    notes,
+    guest_name: newRsvp.guest_name,
+    attending: newRsvp.attending,
+    guest_count: newRsvp.guest_count,
+    invitation_category: newRsvp.invitation_category,
+    guest_group: newRsvp.group_category,
+    group_category: newRsvp.group_category,
+    notes: newRsvp.notes,
   });
 });
 
@@ -281,6 +364,8 @@ app.get('/api/rsvp/:id', (req: Request, res: Response) => {
       guest_name: rsvp.guest_name,
       attending: rsvp.attending,
       guest_count: rsvp.guest_count,
+      invitation_category: rsvp.invitation_category,
+      guest_group: rsvp.group_category,
       group_category: rsvp.group_category,
       notes: rsvp.notes,
       created_at: rsvp.created_at,
@@ -307,48 +392,36 @@ app.put('/api/rsvp/:id', (req: Request, res: Response) => {
     return res.status(403).json({ error: 'Forbidden', message: 'Access denied. Invalid RSVP token.' });
   }
 
-  let attending = rsvp.attending;
-  if (data.attending !== undefined) {
-    if (data.attending !== 0 && data.attending !== 1 && data.attending !== true && data.attending !== false) {
-      return res.status(422).json({ error: 'Validation Error', message: "Field 'attending' must be 0 or 1." });
-    }
-    attending = (data.attending === 1 || data.attending === true) ? 1 : 0;
+  const mergedPayload = {
+    guest_name: data.guest_name !== undefined ? data.guest_name : rsvp.guest_name,
+    attending: data.attending !== undefined ? data.attending : rsvp.attending,
+    guest_count: data.guest_count !== undefined
+      ? data.guest_count
+      : (data.attending === 0 || data.attending === false ? 0 : rsvp.guest_count),
+    invitation_category: data.invitation_category !== undefined
+      ? data.invitation_category
+      : rsvp.invitation_category,
+    guest_group: data.guest_group !== undefined
+      ? data.guest_group
+      : (data.group_category !== undefined ? data.group_category : rsvp.group_category),
+    invitation_identity: data.invitation_identity !== undefined
+      ? data.invitation_identity
+      : rsvp.invitation_identity,
+    notes: data.notes !== undefined ? data.notes : rsvp.notes,
+  };
+
+  const validation = validateRsvpPayload(mergedPayload);
+  if (!validation.valid) {
+    return res.status(validation.status).json({
+      error: validation.error,
+      message: validation.message,
+    });
   }
 
-  let guestCount = rsvp.guest_count;
-  if (data.guest_count !== undefined) {
-    const parsed = parseInt(data.guest_count, 10);
-    if (isNaN(parsed)) {
-      return res.status(422).json({ error: 'Validation Error', message: "Field 'guest_count' must be an integer." });
-    }
-    guestCount = parsed;
-  } else if (attending === 0) {
-    guestCount = 0;
-  }
-
-  if (attending === 1) {
-    if (guestCount < 1 || guestCount > 4) {
-      return res.status(422).json({ error: 'Validation Error', message: "When attending, 'guest_count' must be between 1 and 4." });
-    }
-  } else {
-    guestCount = 0;
-  }
-
-  let groupCategory = rsvp.group_category;
-  if (data.group_category !== undefined) {
-    if (data.group_category && data.group_category !== 'Keluarga' && data.group_category !== 'Teman') {
-      return res.status(422).json({ error: 'Validation Error', message: "Field 'group_category' must be 'Keluarga' or 'Teman'." });
-    }
-    groupCategory = data.group_category;
-  }
-
-  let notes = rsvp.notes;
-  if (data.notes !== undefined) {
-    notes = data.notes ? cleanText(data.notes, 500) : null;
-  }
+  const normalized = validation.normalized;
 
   // If transitioning to attending = 0, cancel active bookings and seats
-  if (attending === 0) {
+  if (normalized.attending === 0) {
     for (const [_, booking] of bookings.entries()) {
       if (booking.rsvp_id === rsvpId && booking.status === 'CONFIRMED') {
         booking.status = 'CANCELLED';
@@ -362,18 +435,24 @@ app.put('/api/rsvp/:id', (req: Request, res: Response) => {
     }
   }
 
-  rsvp.attending = attending;
-  rsvp.guest_count = guestCount;
-  rsvp.group_category = groupCategory;
-  rsvp.notes = notes;
+  rsvp.guest_name = normalized.guest_name;
+  rsvp.attending = normalized.attending;
+  rsvp.guest_count = normalized.guest_count;
+  rsvp.invitation_category = normalized.invitation_category;
+  rsvp.group_category = normalized.guest_group;
+  rsvp.invitation_identity = normalized.invitation_identity;
+  rsvp.notes = normalized.notes;
   rsvp.updated_at = new Date().toISOString();
 
   return res.json({
     status: 'ok',
     message: 'RSVP updated successfully.',
     rsvp_id: rsvpId,
-    attending,
-    guest_count: guestCount,
+    guest_name: rsvp.guest_name,
+    attending: rsvp.attending,
+    guest_count: rsvp.guest_count,
+    invitation_category: rsvp.invitation_category,
+    guest_group: rsvp.group_category,
   });
 });
 
@@ -516,6 +595,14 @@ app.post('/api/reservations', (req: Request, res: Response) => {
 
   if (rsvp.attending !== 1) {
     return res.status(422).json({ error: 'Validation Error', message: 'Reservations can only be made for attending guests (attending=1).' });
+  }
+
+  const maxQuota = getMaxGuestQuota(rsvp.invitation_category);
+  if (normalizedSeats.length > maxQuota) {
+    return res.status(422).json({
+      error: 'Validation Error',
+      message: `Undangan kategori ${rsvp.invitation_category} maksimal ${maxQuota} kursi.`,
+    });
   }
 
   if (normalizedSeats.length !== rsvp.guest_count) {
@@ -662,10 +749,10 @@ app.delete('/api/reservations/:id', (req: Request, res: Response) => {
   });
 });
 
-// Fallback: Serve index.html or 404 for API
+// Fallback: Return 404 for missing /api/* or /static/* assets; serve index.html for SPA routes
 app.use((req: Request, res: Response) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'Not Found', message: `API endpoint '${req.path}' not found.` });
+  if (req.path.startsWith('/api/') || req.path.startsWith('/static/')) {
+    return res.status(404).json({ error: 'Not Found', message: `Resource '${req.path}' not found.` });
   }
   res.sendFile(path.join(__dirname, 'index.html'));
 });

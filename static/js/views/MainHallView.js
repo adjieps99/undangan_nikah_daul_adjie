@@ -1,11 +1,24 @@
 import * as THREE from 'three';
 import { gameState, PHASES } from '../state/GameState.js';
-import { createRetroButton } from '../ui/RetroButton.js';
 import { TextureFactory } from '../three/TextureFactory.js';
 import { CharacterController } from '../three/CharacterController.js';
 import { Controls } from '../game/Controls.js';
 import { audioSystem } from '../game/AudioSystem.js';
 import { Avatar3D } from '../characters/Avatar3D.js';
+import { CHARACTER_ANIM_STATES } from '../characters/CharacterAnimator.js';
+import { computeSeatingRigPose } from '../characters/SeatingAnchor.js';
+import {
+  OUTDOOR_EXIT_SPAWN,
+  MAIN_HALL_INTRO_CONFIG,
+  clampMainHallCameraPosition,
+  interpolateSphericalReveal
+} from '../three/CameraFraming.js';
+import {
+  detectSoftwareWebGL,
+  configurePBRPipeline,
+  scheduleAfterDraw,
+  disposeSceneResources
+} from '../three/WebGLUtils.js';
 
 export class MainHallView {
   constructor() {
@@ -14,6 +27,10 @@ export class MainHallView {
     this.camera = null;
     this.renderer = null;
     this.animationFrameId = null;
+    this._afterDrawHandle = null;
+    this._isDestroyed = false;
+    this._lastFrameTime = performance.now();
+    this.isSoftwareGl = detectSoftwareWebGL();
     this.hallGroup = null;
 
     // Interior Gameplay & Controls
@@ -27,14 +44,25 @@ export class MainHallView {
 
     // Camera Orbit State
     this.cameraYaw = 0.0;
-    this.cameraPitch = 0.24;
-    this.cameraRadius = 5.6;
+    this.cameraPitch = 0.25;
+    this.cameraRadius = 6.2;
     this.targetYaw = 0.0;
-    this.targetPitch = 0.24;
+    this.targetPitch = 0.25;
+    this.introCamera = null;
+    this.interiorOccluders = [];
+    this._occlusionRay = new THREE.Raycaster();
+    this._rayDir = new THREE.Vector3();
+    this._lookTarget = new THREE.Vector3();
 
+    this.groomAvatar = null;
+    this.brideAvatar = null;
+    this.guestAvatars = [];
+
+    this.statusPillEl = null;
+    this.statusTextEl = null;
     this.sitButton = null;
-    this.promptEl = null;
-    this.statusEl = null;
+    this._lastHudKey = '';
+    this._windowCleanups = [];
 
     this.handleInteractBound = () => this.handleAction();
   }
@@ -60,38 +88,25 @@ export class MainHallView {
     // 2. Header HUD Overlay
     const overlay = document.createElement('div');
     overlay.className = 'main-hall-overlay';
-    overlay.style.position = 'absolute';
-    overlay.style.top = '0';
-    overlay.style.left = '0';
-    overlay.style.right = '0';
-    overlay.style.padding = '12px 18px';
-    overlay.style.display = 'flex';
-    overlay.style.justifyContent = 'space-between';
-    overlay.style.alignItems = 'center';
-    overlay.style.background = 'linear-gradient(to bottom, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%)';
-    overlay.style.pointerEvents = 'none';
-
     overlay.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px; pointer-events: auto;">
-        <div style="
-          padding: 6px 14px;
-          background: rgba(212, 175, 55, 0.15);
-          border: 1px solid var(--color-gold);
-          border-radius: 6px;
-        ">
-          <span style="font-size: 10px; color: var(--color-gold); font-weight: bold; letter-spacing: 1px;">THE HACHI GARDEN</span>
-          <div style="font-size: 13px; font-weight: bold; color: #fff;">GRAND WEDDING RECEPTION HALL</div>
-        </div>
+      <div class="main-hall-brand-card">
+        <span class="main-hall-brand-title">ADJIE &amp; DAULIKA — THE HACHI GARDEN</span>
+        <div id="hall-guest-label" class="main-hall-guest-label"></div>
       </div>
-      <div style="display: flex; gap: 8px; align-items: center; pointer-events: auto;">
-        <button id="hall-audio-btn" class="retro-btn retro-btn-secondary" title="Musik & Suara" style="font-size: 13px; padding: 6px 10px; min-width: 36px;">
+      <div class="main-hall-header-actions">
+        <button id="hall-audio-btn" class="retro-btn retro-btn-secondary main-hall-audio-btn" title="Musik &amp; Suara" aria-label="Musik dan Suara">
           ${audioSystem.isMuted ? '🔇' : '🔊'}
         </button>
-        <button id="hall-quick-exit-btn" class="retro-btn retro-btn-secondary" style="font-size: 11px; padding: 6px 12px;">
-          🌿 KELUAR KE KEBUN
+        <button id="hall-quick-exit-btn" class="retro-btn retro-btn-secondary main-hall-exit-btn">
+          🌿 Keluar ke taman
         </button>
       </div>
     `;
+
+    const guestLabelEl = overlay.querySelector('#hall-guest-label');
+    if (guestLabelEl) {
+      guestLabelEl.textContent = `Resepsi • ${state.guestName || 'Tamu Undangan'}`;
+    }
 
     const audioBtn = overlay.querySelector('#hall-audio-btn');
     if (audioBtn) {
@@ -99,84 +114,33 @@ export class MainHallView {
         const isMuted = audioSystem.toggleMute();
         audioBtn.textContent = isMuted ? '🔇' : '🔊';
       });
+      const onMuteSync = (ev) => {
+        const muted = ev && ev.detail ? Boolean(ev.detail.isMuted) : audioSystem.isMuted;
+        audioBtn.textContent = muted ? '🔇' : '🔊';
+      };
+      window.addEventListener('audio-mute-changed', onMuteSync);
+      this._windowCleanups.push(() => window.removeEventListener('audio-mute-changed', onMuteSync));
     }
 
     overlay.querySelector('#hall-quick-exit-btn').addEventListener('click', () => {
       this.exitToGarden();
     });
 
-    // 3. Floating Interaction Prompt
-    this.promptEl = document.createElement('div');
-    this.promptEl.className = 'map-interact-prompt hidden';
-    this.promptEl.style.position = 'absolute';
-    this.promptEl.style.bottom = '120px';
-    this.promptEl.style.left = '50%';
-    this.promptEl.style.transform = 'translateX(-50%)';
-    this.promptEl.style.zIndex = '60';
-    this.promptEl.style.maxWidth = '90%';
-    this.promptEl.style.cursor = 'pointer';
-    this.promptEl.addEventListener('click', () => this.handleAction());
-    this.container.appendChild(this.promptEl);
-
-    // 4. Bottom Guest Card & Action Controls
-    const bannerBox = document.createElement('div');
-    bannerBox.style.position = 'absolute';
-    bannerBox.style.bottom = '16px';
-    bannerBox.style.left = '50%';
-    bannerBox.style.transform = 'translateX(-50%)';
-    bannerBox.style.background = 'rgba(18, 14, 22, 0.94)';
-    bannerBox.style.border = '1px solid var(--color-gold)';
-    bannerBox.style.borderRadius = '12px';
-    bannerBox.style.padding = '10px 18px';
-    bannerBox.style.textAlign = 'center';
-    bannerBox.style.backdropFilter = 'blur(8px)';
-    bannerBox.style.boxShadow = '0 8px 32px rgba(0,0,0,0.7)';
-    bannerBox.style.maxWidth = '92%';
-    bannerBox.style.pointerEvents = 'auto';
-
-    bannerBox.innerHTML = `
-      <div style="font-size: 10px; letter-spacing: 1.5px; color: var(--color-gold); font-weight: bold;">
-        RESEPSI PERNIKAHAN ADJIE & DAUL
-      </div>
-      <h3 id="hall-guest-welcome" style="font-size: 13px; color: #fff; margin: 2px 0 3px;">
-        Selamat Datang, ${state.guestName || 'Tamu Undangan'}!
-      </h3>
-      <p id="hall-seat-status" style="font-size: 11px; color: #ffbe97; margin: 0 0 8px;">
-        Jelajahi Main Hall bebas menggunakan Joystick / WASD. Dekati kursi untuk duduk.
-      </p>
-      <div id="hall-button-row" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;"></div>
+    // 3. Single Compact Top-Center Contextual Status Pill (leaves bottom mobile controls 100% clear)
+    this.statusPillEl = document.createElement('div');
+    this.statusPillEl.className = 'main-hall-status-pill';
+    this.statusPillEl.innerHTML = `
+      <span id="hall-status-text">Dekati kursi kosong untuk duduk santai.</span>
+      <button type="button" id="hall-contextual-btn" class="retro-btn" style="padding: 5px 10px; font-size: 9px; display: none;"></button>
     `;
-
-    this.statusEl = bannerBox.querySelector('#hall-seat-status');
-    const buttonRow = bannerBox.querySelector('#hall-button-row');
-
-    // Contextual Action Button (Sit / Stand / Exit)
-    this.sitButton = createRetroButton({
-      text: '🪑 DUDUK DI KURSI',
-      onClick: () => {
-        this.handleAction();
-      }
-    });
-    this.sitButton.style.padding = '8px 16px';
-    this.sitButton.style.fontSize = '11px';
-    buttonRow.appendChild(this.sitButton);
-
-    // Return to Garden Button
-    const returnBtn = createRetroButton({
-      text: '🌿 KELUAR KE KEBUN',
-      variant: 'secondary',
-      onClick: () => {
-        this.exitToGarden();
-      }
-    });
-    returnBtn.style.padding = '8px 16px';
-    returnBtn.style.fontSize = '11px';
-    buttonRow.appendChild(returnBtn);
+    this.statusTextEl = this.statusPillEl.querySelector('#hall-status-text');
+    this.sitButton = this.statusPillEl.querySelector('#hall-contextual-btn');
+    this.sitButton.addEventListener('click', () => this.handleAction());
 
     this.container.appendChild(overlay);
-    this.container.appendChild(bannerBox);
+    this.container.appendChild(this.statusPillEl);
 
-    // 5. Controls: Virtual Joystick for Mobile & Keyboard WASD
+    // 4. Controls: Virtual Joystick for Mobile & Keyboard WASD
     this.controls = new Controls();
     this.controls.createVirtualJoystick(this.container);
 
@@ -186,8 +150,10 @@ export class MainHallView {
     // Mouse / Touch Camera Orbit Listeners
     this.setupCameraOrbitListeners(canvasContainer);
 
-    // 6. Initialize 3D Interior Environment
-    requestAnimationFrame(() => this.init3D(canvasContainer));
+    // 5. Initialize 3D Interior Environment
+    requestAnimationFrame(() => {
+      if (!this._isDestroyed) this.init3D(canvasContainer);
+    });
 
     return this.container;
   }
@@ -206,8 +172,9 @@ export class MainHallView {
       }
     });
 
-    window.addEventListener('mousemove', (e) => {
+    const onMouseMove = (e) => {
       if (!isMouseDown) return;
+      this.introCamera = null;
       const dx = e.clientX - lastX;
       const dy = e.clientY - lastY;
       lastX = e.clientX;
@@ -216,30 +183,32 @@ export class MainHallView {
       this.targetYaw += dx * 0.005;
       this.targetPitch += dy * 0.005;
       this.targetPitch = Math.max(0.10, Math.min(0.65, this.targetPitch));
-    });
+    };
 
-    window.addEventListener('mouseup', () => {
+    const onMouseUp = () => {
       isMouseDown = false;
-    });
+    };
 
-    // Desktop Mouse Wheel Zoom (Min: 2.8m, Max: 12.0m)
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+
     mountEl.addEventListener('wheel', (e) => {
       e.preventDefault();
+      this.introCamera = null;
       const zoomSpeed = 0.0035;
       this.cameraRadius += e.deltaY * zoomSpeed;
       this.cameraRadius = Math.max(2.8, Math.min(12.0, this.cameraRadius));
     }, { passive: false });
 
-    // Touch Swipe Orbit & Touch Pinch Zoom (Mobile)
     let touchLookId = null;
     let lastTouchX = 0;
     let lastTouchY = 0;
     let initialPinchDist = null;
-    let initialPinchRadius = 5.6;
+    let initialPinchRadius = 6.2;
 
     mountEl.addEventListener('touchstart', (e) => {
       if (e.touches.length === 2) {
-        // Two fingers detected: pinch zoom gesture
+        this.introCamera = null;
         initialPinchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
@@ -260,8 +229,9 @@ export class MainHallView {
       }
     }, { passive: true });
 
-    window.addEventListener('touchmove', (e) => {
+    const onTouchMove = (e) => {
       if (e.touches.length === 2 && initialPinchDist) {
+        this.introCamera = null;
         const currentPinchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
@@ -275,6 +245,7 @@ export class MainHallView {
       for (let i = 0; i < e.changedTouches.length; i++) {
         const touch = e.changedTouches[i];
         if (touch.identifier === touchLookId) {
+          this.introCamera = null;
           const dx = touch.clientX - lastTouchX;
           const dy = touch.clientY - lastTouchY;
           lastTouchX = touch.clientX;
@@ -286,7 +257,7 @@ export class MainHallView {
           break;
         }
       }
-    }, { passive: true });
+    };
 
     const handleTouchEnd = (e) => {
       if (e.touches.length < 2) {
@@ -299,8 +270,18 @@ export class MainHallView {
         }
       }
     };
+
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
     window.addEventListener('touchend', handleTouchEnd, { passive: true });
     window.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+
+    this._windowCleanups.push(() => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchcancel', handleTouchEnd);
+    });
   }
 
   handleAction() {
@@ -318,25 +299,9 @@ export class MainHallView {
     this.isSitting = true;
     this.currentSeat = seat;
 
-    this.character.sitOn(seat, seat.faceAngle);
+    this.character.sitOn(seat, seat.faceAngle, { cushionTopY: 0.475, supportFloorY: 0.0 });
     audioSystem.playChime(440);
-
-    if (this.sitButton) {
-      this.sitButton.innerText = '🚶 BERDIRI KEMBALI';
-    }
-    if (this.statusEl) {
-      this.statusEl.textContent = `✨ Anda sedang duduk santai di ${seat.label}.`;
-    }
-    if (this.promptEl) {
-      this.promptEl.innerHTML = `
-        <div class="prompt-icon">🚶</div>
-        <div class="prompt-text">
-          <strong>Sedang Duduk di ${seat.label}</strong>
-          <span>Tekan [E] atau Gerakkan Joystick untuk Berdiri</span>
-        </div>
-      `;
-      this.promptEl.classList.remove('hidden');
-    }
+    this._syncHudPill(`sit:${seat.id}`);
   }
 
   standUp() {
@@ -344,7 +309,6 @@ export class MainHallView {
     this.isSitting = false;
     audioSystem.playChime(523.25);
 
-    // Step slightly to the side/rear of the seat
     const seat = this.currentSeat;
     let offset = null;
     if (seat) {
@@ -355,26 +319,41 @@ export class MainHallView {
 
     this.character.standUp(offset);
     this.currentSeat = null;
+    this._syncHudPill('idle');
+  }
 
-    if (this.sitButton) {
-      this.sitButton.innerText = '🪑 DUDUK DI KURSI';
-    }
-    if (this.statusEl) {
-      this.statusEl.textContent = 'Jelajahi Main Hall bebas menggunakan Joystick / WASD. Dekati kursi untuk duduk.';
+  _syncHudPill(key) {
+    if (key === this._lastHudKey || !this.statusTextEl || !this.sitButton) return;
+    this._lastHudKey = key;
+
+    if (this.isSitting && this.currentSeat) {
+      this.statusTextEl.textContent = `Duduk di ${this.currentSeat.label}`;
+      this.sitButton.textContent = 'Berdiri kembali';
+      this.sitButton.style.display = 'inline-flex';
+    } else if (this.isNearExit) {
+      this.statusTextEl.textContent = 'Pintu keluar menuju The Hachi Garden';
+      this.sitButton.textContent = '🌿 Keluar ke taman';
+      this.sitButton.style.display = 'inline-flex';
+    } else if (this.nearbySeat) {
+      this.statusTextEl.textContent = `Kursi ${this.nearbySeat.id} (${this.nearbySeat.label})`;
+      this.sitButton.textContent = 'Yuk, duduk sebentar';
+      this.sitButton.style.display = 'inline-flex';
+    } else {
+      this.statusTextEl.textContent = 'Dekati kursi kosong untuk duduk santai.';
+      this.sitButton.style.display = 'none';
     }
   }
 
   exitToGarden() {
     this.destroy();
-    // Return to outdoor world right outside the restaurant doors, facing South
     gameState.setState({
-      lastOutdoorPosition: { x: 0.0, y: 5.0, z: -14.0, rotY: Math.PI },
+      lastOutdoorPosition: { ...OUTDOOR_EXIT_SPAWN },
       gamePhase: PHASES.EXPLORATION
     });
   }
 
   init3D(mountEl) {
-    if (!mountEl) return;
+    if (!mountEl || this._isDestroyed) return;
     const width = mountEl.clientWidth || window.innerWidth;
     const height = mountEl.clientHeight || window.innerHeight;
 
@@ -386,12 +365,12 @@ export class MainHallView {
     const params = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
     const view = params ? params.get('view') : null;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ antialias: !this.isSoftwareGl, powerPreference: 'high-performance' });
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.domElement.dataset.testid = 'mainhall-webgl-canvas';
     mountEl.appendChild(this.renderer.domElement);
+
+    configurePBRPipeline(this.renderer, this.scene, this.isSoftwareGl);
 
     // Warm Ambient Lighting
     const ambientLight = new THREE.AmbientLight('#fff0db', 1.1);
@@ -402,7 +381,7 @@ export class MainHallView {
     dirLight.position.set(0, 6, 2);
     this.scene.add(dirLight);
 
-    // Dedicated Stage Spotlight illuminating Adjie & Daul on the Pelaminan
+    // Dedicated Stage Spotlight illuminating Adjie & Daulika on the Pelaminan
     const stageSpot = new THREE.SpotLight('#ffe8bf', 2.2, 16, Math.PI / 4, 0.4);
     stageSpot.position.set(0, 5.2, -10.5);
     stageSpot.target.position.set(0, 1.5, -14.2);
@@ -416,40 +395,55 @@ export class MainHallView {
     this.buildBrideAndGroomPelaminan();
     this.buildSeatedWeddingGuests();
 
-    // -------------------------------------------------------------
-    // FULLY EXPLORABLE PLAYER CHARACTER CONTROLLER
-    // -------------------------------------------------------------
     this.character = new CharacterController(this.scene);
     this.character.setCustomHeightChecker(() => 0.0);
     this.character.setCustomCollisionChecker((x, z) => this.checkInteriorCollision(x, z));
 
-    // Initial character position & camera framing
     if (view === 'pelaminan') {
-      this.character.mesh.position.set(0, 0.0, -9.5);
-      this.character.mesh.rotation.y = 0;
-      this.cameraYaw = 0.0;
-      this.cameraPitch = 0.18;
-      this.cameraRadius = 5.0;
+      this.character.mesh.position.set(1.45, 0.0, -9.8);
+      this.character.mesh.rotation.y = 0.25;
+      this.cameraYaw = 0.12;
+      this.cameraPitch = 0.16;
+      this.cameraRadius = 5.2;
     } else if (view === 'seated_guests') {
       this.character.mesh.position.set(0, 0.0, -3.0);
       this.character.mesh.rotation.y = -Math.PI / 2;
       this.cameraYaw = 1.2;
+      this.cameraRadius = 6.2;
     } else if (view === 'player_sitting') {
       const seatA = this.allSeats.find(s => !s.isOccupiedByNPC) || this.allSeats[0];
       if (seatA) {
         this.sitAtSeat(seatA);
       }
       this.cameraYaw = 0.6;
+      this.cameraRadius = 5.6;
     } else {
-      // Grand entrance spawn near South double doors, facing Pelaminan North
       this.character.mesh.position.set(0, 0.0, 3.2);
       this.character.mesh.rotation.y = 0;
-      this.cameraYaw = 0.0;
-      this.cameraPitch = 0.22;
-      this.cameraRadius = 4.8;
+      this.cameraYaw = MAIN_HALL_INTRO_CONFIG.startYaw;
+      this.cameraPitch = MAIN_HALL_INTRO_CONFIG.startPitch;
+      this.cameraRadius = MAIN_HALL_INTRO_CONFIG.startRadius;
+      this.introCamera = {
+        elapsed: 0,
+        duration: MAIN_HALL_INTRO_CONFIG.duration
+      };
     }
-    this.targetYaw = this.cameraYaw;
-    this.targetPitch = this.cameraPitch;
+    this.targetYaw = this.introCamera ? MAIN_HALL_INTRO_CONFIG.endYaw : this.cameraYaw;
+    this.targetPitch = this.introCamera ? MAIN_HALL_INTRO_CONFIG.endPitch : this.cameraPitch;
+
+    // Position initial camera cleanly before first frame to avoid single-frame snap
+    if (this.character && this.camera) {
+      const charPos = this.character.getPosition();
+      const aspect = this.camera.aspect || 1.0;
+      const startRad = aspect < 1.0 ? this.cameraRadius * 1.25 : this.cameraRadius;
+      const clampedInit = clampMainHallCameraPosition({
+        x: charPos.x + Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * startRad,
+        y: charPos.y + Math.sin(this.cameraPitch) * startRad + 0.65,
+        z: charPos.z + Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * startRad
+      });
+      this.camera.position.set(clampedInit.x, clampedInit.y, clampedInit.z);
+      this.camera.lookAt(charPos.x, charPos.y + 1.15, charPos.z);
+    }
 
     // Start Realtime Gameplay & Render Loop
     this.startControlsLoop();
@@ -500,8 +494,15 @@ export class MainHallView {
   }
 
   startControlsLoop() {
-    const loop = () => {
-      this.animationFrameId = requestAnimationFrame(loop);
+    this._lastFrameTime = performance.now();
+
+    const step = () => {
+      if (this._isDestroyed) return;
+      const now = performance.now();
+      const rawDelta = (now - this._lastFrameTime) / 1000;
+      this._lastFrameTime = now;
+      const delta = Math.max(0.001, Math.min(0.05, rawDelta || 0.016));
+      const dtScale = Math.min(3.0, Math.max(0.2, delta * 60));
 
       // 1. Process Player Movement (Camera-Relative)
       if (this.character && this.controls) {
@@ -512,37 +513,79 @@ export class MainHallView {
           }
         } else {
           const { dx, dy, intensity, jump } = this.controls.getMovementVector();
+          if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05 || jump) {
+            this.introCamera = null;
+          }
           this.character.move(dx, dy, intensity, jump, this.camera);
         }
-        this.character.update();
+        this.character.update(delta);
       }
 
-      // 2. Third-Person Camera Soft-Follow with Interior Boundary Clamping
+      // 1b. Update Pelaminan Couple & Seated Guest Animations
+      if (this.groomAvatar) {
+        this.groomAvatar.updateAnimation(CHARACTER_ANIM_STATES.SITTING, delta, now * 0.001);
+      }
+      if (this.brideAvatar) {
+        this.brideAvatar.updateAnimation(CHARACTER_ANIM_STATES.SITTING, delta, now * 0.001);
+      }
+      for (const guest of this.guestAvatars) {
+        guest.updateAnimation(CHARACTER_ANIM_STATES.SITTING, delta, now * 0.001);
+      }
+
+      // 2. Smooth Elevated 3/4 Intro -> Third-Person Follow with Boundary Clamping & Column Avoidance
       if (this.character && this.camera) {
-        this.cameraYaw += (this.targetYaw - this.cameraYaw) * 0.12;
-        this.cameraPitch += (this.targetPitch - this.cameraPitch) * 0.12;
+        if (this.introCamera) {
+          this.introCamera.elapsed += delta;
+          const progress = Math.min(1.0, this.introCamera.elapsed / Math.max(0.1, this.introCamera.duration));
+          const reveal = interpolateSphericalReveal(MAIN_HALL_INTRO_CONFIG, progress);
+          this.cameraYaw = reveal.yaw;
+          this.targetYaw = reveal.yaw;
+          this.cameraPitch = reveal.pitch;
+          this.targetPitch = reveal.pitch;
+          this.cameraRadius = reveal.radius;
+          if (progress >= 1.0) {
+            this.introCamera = null;
+          }
+        }
+
+        const lerpAmt = Math.min(1, 0.12 * dtScale);
+        this.cameraYaw += (this.targetYaw - this.cameraYaw) * lerpAmt;
+        this.cameraPitch += (this.targetPitch - this.cameraPitch) * lerpAmt;
 
         const charPos = this.character.getPosition();
         const aspect = this.camera.aspect || 1.0;
-        const lookHeight = 1.05;
-        const lookTarget = new THREE.Vector3(charPos.x, charPos.y + lookHeight, charPos.z);
+        const lookHeight = this.introCamera ? 1.25 : 1.05;
+        this._lookTarget.set(charPos.x, charPos.y + lookHeight, charPos.z);
 
-        const currentRadius = aspect < 1.0 ? this.cameraRadius * 1.35 : this.cameraRadius;
-        const curOffsetX = Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch) * currentRadius;
-        const curOffsetY = Math.sin(this.cameraPitch) * currentRadius + 0.65;
-        const curOffsetZ = Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch) * currentRadius;
+        let safeRadius = aspect < 1.0 ? this.cameraRadius * 1.28 : this.cameraRadius;
+        const dirX = Math.sin(this.cameraYaw) * Math.cos(this.cameraPitch);
+        const dirY = Math.sin(this.cameraPitch);
+        const dirZ = Math.cos(this.cameraYaw) * Math.cos(this.cameraPitch);
 
-        let desiredX = charPos.x + curOffsetX;
-        let desiredY = charPos.y + curOffsetY;
-        let desiredZ = charPos.z + curOffsetZ;
+        // Obstruction check against structural columns inside Main Hall
+        if (this.interiorOccluders.length > 0) {
+          this._rayDir.set(dirX, dirY, dirZ).normalize();
+          this._occlusionRay.set(this._lookTarget, this._rayDir);
+          this._occlusionRay.near = 0.4;
+          this._occlusionRay.far = safeRadius;
 
-        // Interior wall & ceiling safety clamp (prevent clipping into exterior)
-        desiredX = Math.max(-11.2, Math.min(11.2, desiredX));
-        desiredY = Math.max(0.7, Math.min(5.2, desiredY));
-        desiredZ = Math.max(-15.2, Math.min(9.4, desiredZ));
+          const hits = this._occlusionRay.intersectObjects(this.interiorOccluders, false);
+          if (hits.length > 0 && hits[0].distance >= 1.2) {
+            safeRadius = Math.min(safeRadius, Math.max(2.2, hits[0].distance - 0.55));
+          }
+        }
 
-        this.camera.position.set(desiredX, desiredY, desiredZ);
-        this.camera.lookAt(lookTarget);
+        const clampedCam = clampMainHallCameraPosition({
+          x: charPos.x + dirX * safeRadius,
+          y: charPos.y + dirY * safeRadius + 0.65,
+          z: charPos.z + dirZ * safeRadius
+        });
+
+        this.camera.position.lerp(
+          this._rayDir.set(clampedCam.x, clampedCam.y, clampedCam.z),
+          Math.min(1, 0.18 * dtScale)
+        );
+        this.camera.lookAt(this._lookTarget);
       }
 
       // 3. Proximity Detection: Chairs & Exit Door
@@ -552,8 +595,17 @@ export class MainHallView {
       if (this.renderer && this.scene && this.camera) {
         this.renderer.render(this.scene, this.camera);
       }
+
+      if (this.isSoftwareGl && this.renderer) {
+        scheduleAfterDraw(this.renderer, step, (id) => {
+          this._afterDrawHandle = id;
+        });
+      } else {
+        this.animationFrameId = requestAnimationFrame(step);
+      }
     };
-    loop();
+
+    step();
   }
 
   updateProximity() {
@@ -565,29 +617,13 @@ export class MainHallView {
     if (distToDoor < 2.5) {
       this.isNearExit = true;
       this.nearbySeat = null;
-
-      if (!this.isSitting) {
-        if (this.sitButton) {
-          this.sitButton.innerText = '🌿 KELUAR KE KEBUN';
-        }
-        if (this.promptEl) {
-          this.promptEl.innerHTML = `
-            <div class="prompt-icon">🌿</div>
-            <div class="prompt-text">
-              <strong>Pintu Keluar ke Kebun Hachi</strong>
-              <span>Tap / Tekan [E] untuk Kembali ke Kebun</span>
-            </div>
-          `;
-          this.promptEl.classList.remove('hidden');
-        }
-      }
+      this._syncHudPill(this.isSitting ? `sit:${this.currentSeat?.id || ''}` : 'exit');
       return;
     }
     this.isNearExit = false;
 
-    // Check Vacant Seats proximity
     let closestSeat = null;
-    let minDist = 1.7; // Interactive seat radius
+    let minDist = 1.7;
 
     for (const seat of this.allSeats) {
       if (seat.isOccupiedByNPC) continue;
@@ -601,25 +637,11 @@ export class MainHallView {
     this.nearbySeat = closestSeat;
 
     if (this.isSitting) {
-      if (this.sitButton) this.sitButton.innerText = '🚶 BERDIRI KEMBALI';
+      this._syncHudPill(`sit:${this.currentSeat?.id || ''}`);
     } else if (this.nearbySeat) {
-      if (this.sitButton) this.sitButton.innerText = `🪑 DUDUK DI KURSI ${this.nearbySeat.id}`;
-      if (this.promptEl) {
-        const vipTag = this.nearbySeat.isReservedForPlayer ? ' <span style="color:#ffd700;">★ VIP</span>' : '';
-        this.promptEl.innerHTML = `
-          <div class="prompt-icon" style="font-size: 16px;">🪑</div>
-          <div class="prompt-text" style="font-size: 11px; line-height: 1.3;">
-            <div style="font-weight: bold; color: #fff;">Kursi ${this.nearbySeat.id} (${this.nearbySeat.label})${vipTag}</div>
-            <div style="font-size: 10px; color: #ffbe97;">Tap atau Tekan [E] untuk Duduk</div>
-          </div>
-        `;
-        this.promptEl.classList.remove('hidden');
-      }
+      this._syncHudPill(`near:${this.nearbySeat.id}`);
     } else {
-      if (this.sitButton) this.sitButton.innerText = '🪑 DUDUK DI KURSI';
-      if (this.promptEl) {
-        this.promptEl.classList.add('hidden');
-      }
+      this._syncHudPill('idle');
     }
   }
 
@@ -765,12 +787,13 @@ export class MainHallView {
       });
     }
 
-    // Structural Timber Columns
+    // Structural Timber Columns (also registered for interior camera occlusion checks)
     for (let x of [-7.0, 7.0]) {
       for (let z of [-11.0, -2.0, 6.0]) {
         const col = new THREE.Mesh(new THREE.BoxGeometry(0.55, roomH, 0.55), woodRafterMat);
         col.position.set(x, roomH / 2, z);
         this.hallGroup.add(col);
+        this.interiorOccluders.push(col);
 
         const base = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.35, 0.75), baseboardMat);
         base.position.set(x, 0.175, z);
@@ -830,14 +853,34 @@ export class MainHallView {
     goldArch.position.set(0, 3.2, -15.5);
     this.hallGroup.add(goldArch);
 
-    // 3. Monogram Plaque: ADJIE & DAUL
-    const monoBoard = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.70, 0.08), new THREE.MeshLambertMaterial({ color: '#1a1820' }));
-    monoBoard.position.set(0, 4.4, -15.5);
-    this.hallGroup.add(monoBoard);
+    // 3. Monogram Plaque: ADJIE & DAULIKA
+    const monoCanvas = document.createElement('canvas');
+    monoCanvas.width = 512;
+    monoCanvas.height = 96;
+    const mctx = monoCanvas.getContext('2d');
+    mctx.fillStyle = '#1a1820';
+    mctx.fillRect(0, 0, 512, 96);
+    mctx.strokeStyle = '#d4af37';
+    mctx.lineWidth = 4;
+    mctx.strokeRect(6, 6, 500, 84);
+    mctx.fillStyle = '#f5e6a3';
+    mctx.font = 'bold 34px Georgia, serif';
+    mctx.textAlign = 'center';
+    mctx.textBaseline = 'middle';
+    mctx.fillText('ADJIE & DAULIKA', 256, 48);
+    const monoTex = new THREE.CanvasTexture(monoCanvas);
+    monoTex.colorSpace = THREE.SRGBColorSpace;
 
-    const monoText = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.28, 0.10), goldTrimMat);
-    monoText.position.set(0, 4.4, -15.42);
-    this.hallGroup.add(monoText);
+    const monoBoard = new THREE.Mesh(
+      new THREE.BoxGeometry(4.4, 0.72, 0.08),
+      [
+        goldTrimMat, goldTrimMat, goldTrimMat, goldTrimMat,
+        new THREE.MeshLambertMaterial({ map: monoTex }),
+        new THREE.MeshLambertMaterial({ map: monoTex })
+      ]
+    );
+    monoBoard.position.set(0, 4.4, -15.48);
+    this.hallGroup.add(monoBoard);
 
     // 4. Cream Velvet Loveseat Sofa
     const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.42, 0.88), sofaMat);
@@ -856,7 +899,6 @@ export class MainHallView {
 
     // 5. Floral Pillars & Bouquets
     const flowerPinkMat = new THREE.MeshLambertMaterial({ color: '#f28b9b' });
-    const flowerWhiteMat = new THREE.MeshLambertMaterial({ color: '#ffffff' });
     [-3.2, 3.2].forEach(fx => {
       const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.30, 2.2, 12), stageRiserMat);
       pillar.position.set(fx, 1.4, -14.2);
@@ -867,33 +909,48 @@ export class MainHallView {
       this.hallGroup.add(bouquet);
     });
 
-    // 6. REALISTIC 3D ADJIE & DAUL SEATED ON PELAMINAN
-    // Groom (Adjie): Tailored Royal Beskap, Traditional Peci Cap, Golden Brooch
+    // 6. REALISTIC 3D ADJIE & DAULIKA SEATED ON PELAMINAN
+    // Pelaminan seat cushion top is at y = 0.74, stage carpet surface at y = 0.36
+    const groomPose = computeSeatingRigPose({
+      cushionTopY: 0.74,
+      supportFloorY: 0.36,
+      seatCenterX: 0.62,
+      seatCenterZ: -14.15,
+      faceAngle: 0
+    });
     const groomAvatar = new Avatar3D({
       skinColor: '#f1c27d',
       hairColor: '#1a1820',
-      hairStyle: 'cap',
-      outfit: 'traditional_gold',
+      hairStyle: 'short',
+      outfit: 'beskap_hitam',
       accessory: 'none'
-    });
+    }, { role: 'groom' });
     groomAvatar.shadow.visible = false;
-    groomAvatar.setSitting(true);
-    // Sofa cushion is at y = 0.74, stage at 0.34. Placing mesh at y = 0.28 aligns thighs perfectly on cushion
-    groomAvatar.group.position.set(0.62, 0.28, -14.15);
+    groomAvatar.setSitting(true, groomPose);
+    groomAvatar.group.position.set(groomPose.rootPosition.x, groomPose.rootPosition.y, groomPose.rootPosition.z);
     this.hallGroup.add(groomAvatar.group);
+    this.groomAvatar = groomAvatar;
 
-    // Bride (Daul): Royal Bridal Gown / Kebaya with Gold Suntiang Crown & Jasmine Ear Bloom
+    // Bride (Daulika): Elegant white kebaya with black natural hair (NO hijab)
+    const bridePose = computeSeatingRigPose({
+      cushionTopY: 0.74,
+      supportFloorY: 0.36,
+      seatCenterX: -0.62,
+      seatCenterZ: -14.15,
+      faceAngle: 0
+    });
     const brideAvatar = new Avatar3D({
       skinColor: '#ffdbac',
-      hairColor: '#1a1820',
-      hairStyle: 'bun',
-      outfit: 'dress',
-      accessory: 'crown'
-    });
+      hairColor: '#1A1A24',
+      hairStyle: 'long',
+      outfit: 'kebaya_putih',
+      accessory: 'flower'
+    }, { role: 'bride' });
     brideAvatar.shadow.visible = false;
-    brideAvatar.setSitting(true);
-    brideAvatar.group.position.set(-0.62, 0.28, -14.15);
+    brideAvatar.setSitting(true, bridePose);
+    brideAvatar.group.position.set(bridePose.rootPosition.x, bridePose.rootPosition.y, bridePose.rootPosition.z);
     this.hallGroup.add(brideAvatar.group);
+    this.brideAvatar = brideAvatar;
   }
 
   buildSeatedWeddingGuests() {
@@ -1022,37 +1079,77 @@ export class MainHallView {
 
         this.hallGroup.add(chairGroup);
 
-        // Populate Realistic NPC Guest if occupied
+        // Populate Realistic NPC Guest anchored via computeSeatingRigPose (no 40cm floating)
         if (isOccupiedByNPC) {
           const style = guestStyles[guestIdx % guestStyles.length];
           guestIdx++;
+          const guestPose = computeSeatingRigPose({
+            cushionTopY: 0.475,
+            supportFloorY: 0.0,
+            seatCenterX: cx,
+            seatCenterZ: cz,
+            faceAngle: faceTableAngle
+          });
           const guestAvatar = new Avatar3D({
             skinColor: style.skin,
             hairColor: style.hair,
             hairStyle: style.hairStyle,
             outfit: style.outfit,
             accessory: style.accessory
-          });
+          }, { role: 'guest', enableOptionalGlb: false });
           guestAvatar.shadow.visible = false;
-          guestAvatar.setSitting(true);
-          // Chair cushion is at y = 0.44. Align thighs on cushion: 0.44 - 0.46 = -0.02
-          guestAvatar.group.position.set(cx, -0.02, cz);
-          guestAvatar.group.rotation.y = faceTableAngle;
+          guestAvatar.setSitting(true, guestPose);
+          guestAvatar.group.position.set(guestPose.rootPosition.x, guestPose.rootPosition.y, guestPose.rootPosition.z);
+          guestAvatar.group.rotation.y = guestPose.faceAngle;
           this.hallGroup.add(guestAvatar.group);
+          this.guestAvatars.push(guestAvatar);
         }
       }
     });
   }
 
   destroy() {
+    this._isDestroyed = true;
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+    if (this._afterDrawHandle !== null) {
+      clearTimeout(this._afterDrawHandle);
+      this._afterDrawHandle = null;
+    }
     window.removeEventListener('player-interact', this.handleInteractBound);
+    while (this._windowCleanups.length > 0) {
+      const cleanup = this._windowCleanups.pop();
+      try { cleanup(); } catch {}
+    }
     if (this.handleResize) {
       window.removeEventListener('resize', this.handleResize);
       this.handleResize = null;
+    }
+    if (this.controls && typeof this.controls.destroy === 'function') {
+      this.controls.destroy();
+      this.controls = null;
+    }
+    if (this.character && typeof this.character.destroy === 'function') {
+      this.character.destroy();
+      this.character = null;
+    }
+    if (this.groomAvatar) {
+      this.groomAvatar.dispose();
+      this.groomAvatar = null;
+    }
+    if (this.brideAvatar) {
+      this.brideAvatar.dispose();
+      this.brideAvatar = null;
+    }
+    while (this.guestAvatars.length > 0) {
+      const g = this.guestAvatars.pop();
+      try { g.dispose(); } catch {}
+    }
+    if (this.scene) {
+      disposeSceneResources(this.scene);
+      this.scene = null;
     }
     if (this.renderer) {
       this.renderer.dispose();

@@ -14,6 +14,7 @@
   
   --font-pixel: 'Press Start 2P', 'Silkscreen', monospace, system-ui;
   --font-serif: 'Cinzel', 'Cormorant Garamond', Georgia, serif;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -145,39 +146,22 @@ html, body {
 .cover-header-badge {
   text-align: center;
   z-index: 2;
-  margin-bottom: 52px;
+  margin-bottom: 44px;
+  max-width: 440px;
 }
 
-.wedding-names-banner {
-  font-size: 20px;
-  font-weight: 800;
-  color: #fff;
-  letter-spacing: 3px;
-  line-height: 1.5;
-  text-shadow: 2px 2px #000;
-}
-
-.garden-brand-title {
+.cover-welcome-heading {
   font-family: var(--font-serif);
-  font-size: 22px;
+  font-size: clamp(20px, 4.2vw, 27px);
   font-weight: 700;
   color: var(--color-gold-light);
-  letter-spacing: 3px;
-  margin-top: 6px;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8), 0 0 15px rgba(212, 175, 55, 0.4);
+  letter-spacing: 0.8px;
+  line-height: 1.45;
+  margin: 0;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.85), 0 0 18px rgba(212, 175, 55, 0.25);
 }
 
-.garden-brand-tagline {
-  font-family: var(--font-serif);
-  font-size: 13px;
-  color: #ffbe97;
-  font-style: italic;
-  margin-top: 4px;
-  letter-spacing: 1px;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
-}
-
-/* --- PHYSICALLY CLOSED ENVELOPE COMPONENT --- */
+/* --- PHYSICALLY CLOSED ENVELOPE COMPONENT (SINGLE LAYERED SHELL) --- */
 .envelope-wrapper {
   position: relative;
   width: 100%;
@@ -193,6 +177,10 @@ html, body {
   position: relative;
   width: 100%;
   height: 206px;
+  background: #a17822;
+  border: 2px solid #1d1507;
+  border-radius: 4px;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.62);
   cursor: pointer;
   perspective: 900px;
   transition: transform 0.3s ease;
@@ -200,16 +188,6 @@ html, body {
 
 .envelope-interactive:hover {
   transform: translateY(-2px);
-}
-
-/* Back Plate */
-.envelope-back-plate {
-  position: absolute;
-  inset: 0;
-  background: #a17822;
-  border: 2px solid #1d1507;
-  box-shadow: 0 12px 28px rgba(0,0,0,0.6);
-  z-index: 1;
 }
 
 /* Letter Clipping Sleeve keeps letter physically inside closed envelope */
@@ -231,19 +209,19 @@ html, body {
 .envelope-letter-sheet {
   position: absolute;
   top: 12px;
-  left: 5%;
-  width: 90%;
+  left: 6%;
+  width: 88%;
   min-height: 184px;
   background: #fdfcf7;
-  border: 2px solid #2b2210;
+  border: 1.5px solid #c9b583;
   border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  padding: 12px 14px 14px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  padding: 16px 16px 14px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
   z-index: 2;
   opacity: 0;
@@ -261,53 +239,50 @@ html, body {
 }
 
 .letter-top-ornament {
-  font-size: 8px;
-  color: var(--color-gold);
+  font-size: 9px;
+  color: var(--color-gold-dark);
   letter-spacing: 3px;
 }
 
-.letter-badge {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  color: #8b2500;
-  font-weight: bold;
-}
-
 .letter-guest-to {
-  font-size: 9px;
-  color: #777;
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-style: italic;
+  color: #6b5b45;
   margin-top: 2px;
 }
 
 .letter-guest-recipient {
   font-family: var(--font-serif);
-  font-size: 15px;
-  font-weight: bold;
-  color: #1a1610;
-  margin: 1px 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f1910;
+  margin: 0 0 2px;
 }
 
 .letter-body-text {
-  font-size: 9.5px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
   color: #4a3e2e;
-  line-height: 1.45;
+  line-height: 1.55;
   margin: 0 4px 8px;
 }
 
 .letter-open-cta-btn {
   background: linear-gradient(135deg, #d4af37 0%, #b89228 100%);
   color: #121008;
-  font-family: var(--font-pixel);
-  font-size: 10px;
-  font-weight: bold;
-  padding: 9px 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 10px 14px;
   border: 2px solid #000;
   border-radius: 4px;
   box-shadow: 2px 2px 0 #000;
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.15s, box-shadow 0.15s;
-  width: 92%;
+  width: 94%;
+  white-space: nowrap;
 }
 
 .letter-open-cta-btn:hover {
@@ -316,7 +291,7 @@ html, body {
   box-shadow: 3px 3px 0 #000;
 }
 
-/* Front Pocket (Responsive full-width geometry with zero narrow-screen overflow) */
+/* Front Pocket (Aligned cleanly edge-to-edge inside envelope shell) */
 .envelope-front-pocket {
   position: absolute;
   bottom: 0;
@@ -352,13 +327,13 @@ html, body {
   pointer-events: none;
 }
 
-/* Top Flap (Responsive percentage clip-path triangle flipping cleanly within envelope headroom) */
+/* Top Flap */
 .envelope-top-flap {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 92px;
+  height: 94px;
   background: #be932d;
   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
   transform-origin: top center;
@@ -368,18 +343,19 @@ html, body {
 
 .envelope-interactive.open .envelope-top-flap {
   transform: rotateX(180deg);
-  opacity: 0.72;
+  opacity: 0;
+  pointer-events: none;
   z-index: 1;
 }
 
-/* Wax Seal on Flap tip (native button for clean accessibility) */
+/* Wax Seal on Flap tip (native button with heart crest, avoiding duplicate envelope icon) */
 .envelope-wax-seal {
   position: absolute;
-  top: 62px;
+  top: 64px;
   left: 50%;
   transform: translateX(-50%);
-  width: 60px;
-  height: 60px;
+  width: 58px;
+  height: 58px;
   background: radial-gradient(circle, #b83434 0%, #7d1c1c 100%);
   border: 2px solid #541111;
   border-radius: 50%;
@@ -400,28 +376,32 @@ html, body {
 }
 
 .wax-seal-icon {
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1;
+  color: #f5e6a3;
 }
 
 .wax-seal-text {
   font-size: 5px;
   font-weight: bold;
   color: #fff;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
+  letter-spacing: 0.6px;
+  margin-top: 3px;
 }
 
 .envelope-instruction-hint {
-  font-size: 10px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
   color: var(--color-gold-light);
   opacity: 0.85;
-  letter-spacing: 1px;
-  text-shadow: 1px 1px #000;
+  letter-spacing: 0.4px;
+  text-shadow: 1px 1px 4px #000;
   transition: opacity 0.3s;
 }
 
-.envelope-interactive.open ~ .envelope-instruction-hint {
+.envelope-instruction-hint.is-hidden {
   opacity: 0;
+  pointer-events: none;
 }
 
 .letter-guest-name {
@@ -992,7 +972,10 @@ html, body {
 }
 
 .modal-title {
-  font-size: 12px;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
   color: var(--color-gold-light);
 }
 
@@ -1000,19 +983,22 @@ html, body {
   background: #8b0000;
   color: #fff;
   border: 2px solid #000;
-  width: 24px;
-  height: 24px;
-  font-family: var(--font-pixel);
-  font-size: 10px;
+  width: 26px;
+  height: 26px;
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 12px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
 }
 
 .modal-body {
   overflow-y: auto;
   padding-right: 4px;
+  font-family: var(--font-sans);
 }
 
 svg {
@@ -1258,6 +1244,55 @@ svg {
   opacity: 0;
   background: radial-gradient(circle at center, rgba(35, 22, 42, 0.96) 0%, rgba(12, 10, 18, 0.99) 100%);
   transition: opacity 0.26s ease;
+}
+
+/* Subtle Personal Greeting Banner in Main Hall (non-obstructive, clear of Pelaminan and mobile controls) */
+.main-hall-greeting-note {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: rgba(24, 18, 28, 0.88);
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-style: italic;
+  color: #f5e6a3;
+  z-index: 58;
+  max-width: min(560px, 72vw);
+  pointer-events: auto;
+}
+
+.main-hall-greeting-text {
+  line-height: 1.4;
+}
+
+.main-hall-greeting-close {
+  background: transparent;
+  border: none;
+  color: #d4af37;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .main-hall-greeting-note {
+    bottom: 146px;
+    font-size: 11.5px;
+    padding: 6px 12px;
+    max-width: 88vw;
+    text-align: center;
+  }
 }
 
 .scene-transition-curtain.active {

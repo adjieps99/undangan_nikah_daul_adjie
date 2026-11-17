@@ -11,7 +11,6 @@ export const WEDDING_DATA = {
       name: 'Adjie',
       fullName: 'Adjie Prasatia Sakti',
       parents: 'Putra dari Bapak Muhammad Saleh & Ibu Sri Ratni',
-      attireLabel: 'Beskap Hitam Klasik',
       avatarConfig: {
         gender: 'male',
         skinColor: '#F1C27D',
@@ -25,7 +24,6 @@ export const WEDDING_DATA = {
       name: 'Daulika',
       fullName: 'Daulika Pratiwi',
       parents: 'Putri dari Bapak Achmad Agussalim & Ibu Ratu Rachmi Utari',
-      attireLabel: 'Kebaya Putih Anggun',
       avatarConfig: {
         gender: 'female',
         skinColor: '#FFDBAC',
@@ -50,10 +48,43 @@ export const WEDDING_DATA = {
     mapsUrl: 'https://maps.app.goo.gl/JgJMgK3bS5mcspb26'
   },
   playlist: ASSET_MANIFEST.audio.playlist,
-  favorites: [
-    { item: 'Mie Ayam Jamur Spesial', note: 'Hidangan hangat yang selalu jadi pilihan favorit saat makan bersama.' },
-    { item: 'Es Kopi Susu Gula Aren', note: 'Teman setia saat mengobrol santai berjam-jam.' },
-    { item: 'Pisang Goreng Keju Karamel', note: 'Cemilan manis kesukaan kami di sore hari.' }
+  favoriteRestaurants: [
+    {
+      name: 'Martabak San Fransisco',
+      ownerLabel: 'Favorit Daulika',
+      city: 'Bandung',
+      mapsUrl: 'https://share.google/67KGEGQkmw9iKx4Og'
+    },
+    {
+      name: 'Sate Rembiga Ibu Sinnaseh',
+      ownerLabel: 'Favorit Adjie',
+      city: 'Lombok',
+      mapsUrl: 'https://share.google/P6ErOlDmWjit3enqu'
+    },
+    {
+      name: 'Spesial Soto Boyolali (SSB) Hj Hesti',
+      ownerLabel: 'Favorit Bersama',
+      city: '',
+      mapsUrl: 'https://share.google/e4QDt7v5I2z7pVBXG'
+    },
+    {
+      name: "Scarlett's House",
+      ownerLabel: 'Tempat Favorit Lainnya',
+      city: '',
+      mapsUrl: 'https://share.google/gzmH8GyjamnXyv1vr'
+    },
+    {
+      name: 'Seafood Ayu',
+      ownerLabel: 'Tempat Favorit Lainnya',
+      city: '',
+      mapsUrl: 'https://share.google/XpDKQXd4eWo4Cg3cm'
+    },
+    {
+      name: 'Rumah Makan Karya Bundo',
+      ownerLabel: 'Tempat Favorit Lainnya',
+      city: '',
+      mapsUrl: 'https://share.google/Wm3DYP8YlqDnqKVzN'
+    }
   ],
   gift: {
     subtitle: 'Doa restu dari Anda adalah hadiah paling berharga bagi kami. Bagi keluarga dan sahabat yang ingin memberikan tanda kasih secara digital:',

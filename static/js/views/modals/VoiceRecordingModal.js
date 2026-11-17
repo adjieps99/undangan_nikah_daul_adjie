@@ -2,10 +2,17 @@ import { createModal } from '../../ui/Modal.js';
 import { gameState, PHASES } from '../../state/GameState.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
 import { ASSET_MANIFEST } from '../../config/assetManifest.js';
+import { audioSystem } from '../../game/AudioSystem.js';
 
 const VOICE_GREETING_AUDIO_URL = ASSET_MANIFEST.audio.voiceGreeting.url;
+let activeVoiceModalCleanup = null;
 
 export function createVoiceRecordingModal() {
+  if (typeof activeVoiceModalCleanup === 'function') {
+    try { activeVoiceModalCleanup(); } catch {}
+    activeVoiceModalCleanup = null;
+  }
+
   const content = document.createElement('div');
   content.className = 'voice-modal-content';
 
@@ -15,16 +22,17 @@ export function createVoiceRecordingModal() {
   let analyser = null;
   let mediaSource = null;
   let animationId = null;
+  let isDisposed = false;
+
+  const abortCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const listenerOpts = abortCtrl ? { signal: abortCtrl.signal } : undefined;
 
   const audioEl = new Audio();
   audioEl.preload = 'metadata';
 
   content.innerHTML = `
-    <div style="text-align: center; margin-bottom: 12px;">
-      <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
-        PESAN SUARA ADJIE &amp; DAULIKA
-      </span>
-      <h3 style="font-size: 15px; color: #fff; margin: 4px 0 2px;">
+    <div style="text-align: center; margin-bottom: 14px;">
+      <h3 style="font-family: var(--font-serif); font-size: 17px; color: #fff; margin: 0; line-height: 1.4;">
         Ada pesan kecil dari kami buat kamu.
       </h3>
     </div>
@@ -58,10 +66,11 @@ export function createVoiceRecordingModal() {
 
       <!-- Honest Availability Status Notice when MP3 is not yet provided -->
       <p id="voice-availability-note" style="
-        font-size: 11px;
+        font-family: var(--font-sans);
+        font-size: 12.5px;
         color: #ffbe97;
         text-align: center;
-        line-height: 1.45;
+        line-height: 1.55;
         margin: 0 0 10px;
       ">
         Memeriksa rekaman suara...
@@ -69,7 +78,7 @@ export function createVoiceRecordingModal() {
 
       <!-- Timeline & Time readout -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span id="voice-current-time" style="font-size: 10px; color: #f5eedc; font-family: monospace;">--:--</span>
+        <span id="voice-current-time" style="font-size: 11px; color: #f5eedc; font-family: monospace;">--:--</span>
         <input type="range" id="voice-seek-bar" min="0" max="100" value="0" disabled style="
           flex: 1;
           margin: 0 10px;
@@ -78,15 +87,15 @@ export function createVoiceRecordingModal() {
           height: 4px;
           opacity: 0.45;
         ">
-        <span id="voice-total-time" style="font-size: 10px; color: #a0a0b0; font-family: monospace;">--:--</span>
+        <span id="voice-total-time" style="font-size: 11px; color: #a0a0b0; font-family: monospace;">--:--</span>
       </div>
 
       <!-- Playback & Volume Control Strip -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);">
         <div style="display: flex; align-items: center; gap: 10px;">
-          <button type="button" id="voice-play-pause-btn" disabled style="
-            width: 38px;
-            height: 38px;
+          <button type="button" id="voice-play-pause-btn" disabled aria-label="Putar atau jeda pesan suara" style="
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
             background: linear-gradient(135deg, #d4af37 0%, #b89228 100%);
             border: 2px solid #000;
@@ -101,7 +110,7 @@ export function createVoiceRecordingModal() {
             box-shadow: 2px 2px 0 #000;
             transition: transform 0.1s, opacity 0.2s;
           ">▶</button>
-          <span id="voice-status-pill" style="font-size: 9px; letter-spacing: 0.8px; color: var(--color-gold-light); font-weight: bold;">
+          <span id="voice-status-pill" style="font-family: var(--font-sans); font-size: 11px; letter-spacing: 0.6px; color: var(--color-gold-light); font-weight: 700;">
             MENYIAPKAN AUDIO...
           </span>
         </div>
@@ -109,7 +118,7 @@ export function createVoiceRecordingModal() {
         <!-- Volume Slider -->
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 12px; color: #aaa;">🔊</span>
-          <input type="range" id="voice-volume-slider" min="0" max="1" step="0.05" value="0.85" style="
+          <input type="range" id="voice-volume-slider" aria-label="Volume pesan suara" min="0" max="1" step="0.05" value="0.85" style="
             width: 65px;
             accent-color: var(--color-gold);
             cursor: pointer;
@@ -119,7 +128,7 @@ export function createVoiceRecordingModal() {
     </div>
 
     <!-- Personal message text -->
-    <div style="text-align: center; font-size: 11px; opacity: 0.9; line-height: 1.5; margin-bottom: 16px;">
+    <div style="text-align: center; font-family: var(--font-sans); font-size: 13px; color: #f5eedc; opacity: 0.92; line-height: 1.6; margin-bottom: 18px;">
       Terima kasih sudah meluangkan waktu untuk membuka undangan kami. 
       Semoga kamu menikmati perjalanan kecil di taman ini.
     </div>
@@ -196,33 +205,36 @@ export function createVoiceRecordingModal() {
     if (Number.isFinite(audioEl.duration) && audioEl.duration > 0) {
       setAvailableState();
     }
-  });
+  }, listenerOpts);
 
   audioEl.addEventListener('timeupdate', () => {
     if (!audioAvailable || !Number.isFinite(audioEl.duration) || audioEl.duration <= 0) return;
     currentTimeEl.textContent = formatTime(audioEl.currentTime);
     seekBar.value = String((audioEl.currentTime / audioEl.duration) * 100);
-  });
+  }, listenerOpts);
 
   audioEl.addEventListener('ended', () => {
     isPlaying = false;
     playBtn.textContent = '▶';
     statusPill.textContent = 'SELESAI DIPUTAR';
     statusPill.style.color = 'var(--color-gold-light)';
-  });
+    audioSystem.resumeBgmAfterVoiceGreeting();
+  }, listenerOpts);
 
   audioEl.addEventListener('error', () => {
     setUnavailableState();
-  });
+  }, listenerOpts);
 
   // Check server manifest availability cleanly (zero 404 noise if file not yet uploaded)
   import('../../config/assetManifest.js')
     .then(({ fetchAssetStatus }) => fetchAssetStatus())
     .then((status) => {
+      if (isDisposed) return;
       if (status && status.audio && status.audio.voiceGreeting === true) {
         audioEl.src = VOICE_GREETING_AUDIO_URL;
       } else if (!status) {
         return fetch(VOICE_GREETING_AUDIO_URL, { method: 'HEAD' }).then((resp) => {
+          if (isDisposed) return;
           if (resp.ok) audioEl.src = VOICE_GREETING_AUDIO_URL;
           else setUnavailableState();
         });
@@ -231,11 +243,12 @@ export function createVoiceRecordingModal() {
       }
     })
     .catch(() => {
-      setUnavailableState();
+      if (!isDisposed) setUnavailableState();
     });
 
   // Waveform drawing loop
   const renderWaveform = () => {
+    if (isDisposed) return;
     animationId = requestAnimationFrame(renderWaveform);
     const width = canvas.width;
     const height = canvas.height;
@@ -287,6 +300,7 @@ export function createVoiceRecordingModal() {
       statusPill.textContent = 'DIJEDA';
       statusPill.style.color = 'var(--color-gold-light)';
     } else {
+      audioSystem.pauseBgmForVoiceGreeting();
       try {
         await audioEl.play();
         isPlaying = true;
@@ -294,27 +308,37 @@ export function createVoiceRecordingModal() {
         statusPill.textContent = 'MEMUTAR PESAN...';
         statusPill.style.color = '#44ff88';
       } catch {
+        audioSystem.resumeBgmAfterVoiceGreeting();
         setUnavailableState();
       }
     }
   };
 
-  playBtn.addEventListener('click', togglePlay);
+  playBtn.addEventListener('click', togglePlay, listenerOpts);
 
   seekBar.addEventListener('input', (e) => {
     if (!audioAvailable || !Number.isFinite(audioEl.duration) || audioEl.duration <= 0) return;
     audioEl.currentTime = (parseFloat(e.target.value) / 100) * audioEl.duration;
     currentTimeEl.textContent = formatTime(audioEl.currentTime);
-  });
+  }, listenerOpts);
 
   volumeSlider.addEventListener('input', (e) => {
     audioEl.volume = parseFloat(e.target.value);
-  });
+  }, listenerOpts);
 
   const cleanup = () => {
+    if (isDisposed) return;
+    isDisposed = true;
+    isPlaying = false;
+    if (activeVoiceModalCleanup === cleanup) {
+      activeVoiceModalCleanup = null;
+    }
     if (animationId) {
       cancelAnimationFrame(animationId);
       animationId = null;
+    }
+    if (abortCtrl) {
+      try { abortCtrl.abort(); } catch {}
     }
     try {
       audioEl.pause();
@@ -324,7 +348,10 @@ export function createVoiceRecordingModal() {
     if (audioContext && audioContext.state !== 'closed') {
       try { audioContext.close(); } catch {}
     }
+    audioSystem.resumeBgmAfterVoiceGreeting();
   };
+
+  activeVoiceModalCleanup = cleanup;
 
   // Single prominent CTA without redundant top-right close button
   const ctaBtn = createRetroButton({

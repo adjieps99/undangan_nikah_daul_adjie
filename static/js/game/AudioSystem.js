@@ -17,6 +17,19 @@ export function shouldPreservePlaybackOnSelect({
 }
 
 /**
+ * Pure coordination helper for Voice Recording <-> BGM audio handoff.
+ * Only resumes BGM automatically if BGM was paused specifically for Voice playback
+ * and the guest has not manually paused/muted BGM.
+ */
+export function shouldResumeBgmAfterVoice({
+  pausedByVoice = false,
+  userPausedMusic = false,
+  bgmCurrentlyPaused = true
+}) {
+  return Boolean(pausedByVoice && !userPausedMusic && bgmCurrentlyPaused);
+}
+
+/**
  * AudioSystem — Unified Sound, Ambient & Shared Music Manager
  * - Single shared HTML5 Audio BGM channel for the entire app (Cover -> Avatar -> Opening -> Garden -> Main Hall)
  * - Web Audio API ambient wind/chimes (yields gracefully when BGM track is playing) & UI/footstep SFX
@@ -41,6 +54,7 @@ class AudioSystem {
     this._hasAttemptedOpeningBgm = false;
     this._awaitingGestureResume = false;
     this._userPausedMusic = false;
+    this._bgmPausedByVoice = false;
     this._musicListeners = new Set();
 
     const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
@@ -392,6 +406,7 @@ class AudioSystem {
 
       if (autoPlay) {
         this._userPausedMusic = false;
+        this._bgmPausedByVoice = false;
         try {
           await this.bgmAudio.play();
           this._awaitingGestureResume = false;
@@ -403,6 +418,31 @@ class AudioSystem {
     }
 
     this._emitMusicUpdate();
+  }
+
+  pauseBgmForVoiceGreeting() {
+    if (!this.bgmAudio || this.bgmAudio.paused) return false;
+    this._bgmPausedByVoice = true;
+    this.bgmAudio.pause();
+    return true;
+  }
+
+  async resumeBgmAfterVoiceGreeting() {
+    const canResume = shouldResumeBgmAfterVoice({
+      pausedByVoice: this._bgmPausedByVoice,
+      userPausedMusic: this._userPausedMusic,
+      bgmCurrentlyPaused: Boolean(this.bgmAudio && this.bgmAudio.paused)
+    });
+    this._bgmPausedByVoice = false;
+    if (!canResume || !this.bgmAudio) return false;
+    try {
+      await this.bgmAudio.play();
+      this._awaitingGestureResume = false;
+      return true;
+    } catch {
+      this._awaitingGestureResume = true;
+      return false;
+    }
   }
 
   async togglePlayPause() {
@@ -417,11 +457,13 @@ class AudioSystem {
 
     if (!this.bgmAudio.paused) {
       this._userPausedMusic = true;
+      this._bgmPausedByVoice = false;
       this.bgmAudio.pause();
       return false;
     }
 
     this._userPausedMusic = false;
+    this._bgmPausedByVoice = false;
     try {
       await this.bgmAudio.play();
       this._awaitingGestureResume = false;

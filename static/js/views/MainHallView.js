@@ -105,7 +105,7 @@ export class MainHallView {
 
     const guestLabelEl = overlay.querySelector('#hall-guest-label');
     if (guestLabelEl) {
-      guestLabelEl.textContent = `Resepsi • ${state.guestName || 'Tamu Undangan'}`;
+      guestLabelEl.textContent = `Ramah Tamah • ${state.guestName || 'Tamu Undangan'}`;
     }
 
     const audioBtn = overlay.querySelector('#hall-audio-btn');
@@ -137,8 +137,23 @@ export class MainHallView {
     this.sitButton = this.statusPillEl.querySelector('#hall-contextual-btn');
     this.sitButton.addEventListener('click', () => this.handleAction());
 
+    // Subtle personal note from Adjie & Daulika (non-obstructive, dismissible)
+    const noteCard = document.createElement('div');
+    noteCard.className = 'main-hall-greeting-note';
+    noteCard.innerHTML = `
+      <span class="main-hall-greeting-text">“Kalau nanti ketemu kami, jangan lupa sapa-sapa, ya!” — Adjie &amp; Daulika</span>
+      <button type="button" class="main-hall-greeting-close" aria-label="Tutup pesan">✕</button>
+    `;
+    const closeNoteBtn = noteCard.querySelector('.main-hall-greeting-close');
+    if (closeNoteBtn) {
+      closeNoteBtn.addEventListener('click', () => {
+        noteCard.remove();
+      });
+    }
+
     this.container.appendChild(overlay);
     this.container.appendChild(this.statusPillEl);
+    this.container.appendChild(noteCard);
 
     // 4. Controls: Virtual Joystick for Mobile & Keyboard WASD
     this.controls = new Controls();

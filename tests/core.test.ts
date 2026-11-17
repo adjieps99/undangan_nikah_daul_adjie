@@ -19,7 +19,7 @@ import {
 import { TerrainManager } from '../static/js/world/TerrainManager.js';
 import { WEDDING_DATA } from '../static/js/data/wedding.js';
 import { ASSET_MANIFEST, getTrackFilename } from '../static/js/config/assetManifest.js';
-import { shouldPreservePlaybackOnSelect } from '../static/js/game/AudioSystem.js';
+import { shouldPreservePlaybackOnSelect, shouldResumeBgmAfterVoice } from '../static/js/game/AudioSystem.js';
 import { isVegetationSpotClear } from '../static/js/world/GardenClearance.js';
 import {
   OUTDOOR_EXIT_SPAWN,
@@ -161,12 +161,14 @@ test('TerrainManager walkability, Staircase 2 continuity, and resolveFilteredGro
   assert.equal(TerrainManager.resolveFilteredGroundHeight(0, 10, null), 2.0);
 });
 
-test('wedding data preserves official couple details, attire rules, and exact 5-track playlist', () => {
+test('wedding data preserves official couple details, attire rules, 6 favorite restaurants, and exact 5-track playlist', () => {
   assert.equal(WEDDING_DATA.couple.groom.fullName, 'Adjie Prasatia Sakti');
   assert.equal(WEDDING_DATA.couple.groom.avatarConfig.outfit, 'beskap_hitam');
+  assert.equal('attireLabel' in WEDDING_DATA.couple.groom, false);
   assert.equal(WEDDING_DATA.couple.bride.fullName, 'Daulika Pratiwi');
   assert.equal(WEDDING_DATA.couple.bride.avatarConfig.outfit, 'kebaya_putih');
   assert.notEqual(WEDDING_DATA.couple.bride.avatarConfig.hairStyle, 'hijab');
+  assert.equal('attireLabel' in WEDDING_DATA.couple.bride, false);
   assert.equal(WEDDING_DATA.schedule.event.title, 'Akad Nikah & Ramah Tamah');
   assert.equal(WEDDING_DATA.schedule.event.date, 'Sabtu, 5 Desember 2026');
   assert.equal(WEDDING_DATA.schedule.event.time, '08.30 - 13.00 WIB');
@@ -178,6 +180,21 @@ test('wedding data preserves official couple details, attire rules, and exact 5-
   assert.equal(WEDDING_DATA.playlist[0].isDefault, true);
   assert.equal(WEDDING_DATA.playlist[4].title, 'Just You');
   assert.equal(WEDDING_DATA.playlist[4].artist, 'Teddy Aditya');
+
+  assert.equal(Array.isArray(WEDDING_DATA.favoriteRestaurants), true);
+  assert.equal(WEDDING_DATA.favoriteRestaurants.length, 6);
+  const expectedRestaurants = [
+    { name: 'Martabak San Fransisco', url: 'https://share.google/67KGEGQkmw9iKx4Og' },
+    { name: 'Sate Rembiga Ibu Sinnaseh', url: 'https://share.google/P6ErOlDmWjit3enqu' },
+    { name: 'Spesial Soto Boyolali (SSB) Hj Hesti', url: 'https://share.google/e4QDt7v5I2z7pVBXG' },
+    { name: "Scarlett's House", url: 'https://share.google/gzmH8GyjamnXyv1vr' },
+    { name: 'Seafood Ayu', url: 'https://share.google/XpDKQXd4eWo4Cg3cm' },
+    { name: 'Rumah Makan Karya Bundo', url: 'https://share.google/Wm3DYP8YlqDnqKVzN' }
+  ];
+  expectedRestaurants.forEach((exp, idx) => {
+    assert.equal(WEDDING_DATA.favoriteRestaurants[idx].name, exp.name);
+    assert.equal(WEDDING_DATA.favoriteRestaurants[idx].mapsUrl, exp.url);
+  });
 });
 
 test('ASSET_MANIFEST binds default opening track and exact audio/image/model paths', () => {
@@ -221,6 +238,32 @@ test('shouldPreservePlaybackOnSelect keeps Langit Merah Muda playing seamlessly 
       hasLoadedSource: true,
       availability: 'available'
     }),
+    false
+  );
+});
+
+test('shouldResumeBgmAfterVoice coordinates Voice Recording <-> BGM resume safely without overriding manual user pause', () => {
+  // Resumes when voice paused active BGM and guest did not pause music manually
+  assert.equal(
+    shouldResumeBgmAfterVoice({ pausedByVoice: true, userPausedMusic: false, bgmCurrentlyPaused: true }),
+    true
+  );
+
+  // Never auto-resumes if guest had manually paused BGM beforehand
+  assert.equal(
+    shouldResumeBgmAfterVoice({ pausedByVoice: false, userPausedMusic: true, bgmCurrentlyPaused: true }),
+    false
+  );
+
+  // Never resumes if guest paused BGM during or after voice greeting
+  assert.equal(
+    shouldResumeBgmAfterVoice({ pausedByVoice: true, userPausedMusic: true, bgmCurrentlyPaused: true }),
+    false
+  );
+
+  // No-op if BGM is already playing
+  assert.equal(
+    shouldResumeBgmAfterVoice({ pausedByVoice: true, userPausedMusic: false, bgmCurrentlyPaused: false }),
     false
   );
 });

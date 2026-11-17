@@ -9,14 +9,11 @@ export function createLocationModal() {
   const venue = WEDDING_DATA.venue;
 
   content.innerHTML = `
-    <div style="text-align: center; margin-bottom: 22px;">
-      <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
-        WAKTU &amp; LOKASI ACARA
-      </span>
-      <h3 style="font-family: var(--font-serif); font-size: 18px; color: #fff; margin: 8px 0 6px;">
+    <div style="text-align: center; margin-bottom: 20px;">
+      <h3 style="font-family: var(--font-serif); font-size: 20px; color: #fff; margin: 0 0 8px;">
         ${evt.title}
       </h3>
-      <p style="font-size: 11px; color: #ffbe97; margin: 0; line-height: 1.5;">
+      <p style="font-family: var(--font-sans); font-size: 13px; color: #ffbe97; margin: 0; line-height: 1.55;">
         Merupakan kebahagiaan bagi kami apabila kamu bisa hadir dan berbagi doa di hari spesial ini.
       </p>
     </div>
@@ -30,29 +27,30 @@ export function createLocationModal() {
       display: flex;
       flex-direction: column;
       gap: 16px;
+      font-family: var(--font-sans);
     ">
       <div style="display: flex; align-items: flex-start; gap: 12px;">
         <span style="font-size: 22px; line-height: 1;">🗓️</span>
         <div>
-          <div style="font-size: 10px; color: var(--color-gold); font-weight: bold; letter-spacing: 1px;">TANGGAL ACARA</div>
-          <div style="font-size: 13px; font-weight: bold; color: #fff; margin-top: 4px; line-height: 1.4;">${evt.date}</div>
+          <div style="font-size: 10.5px; color: var(--color-gold); font-weight: 700; letter-spacing: 1px;">TANGGAL ACARA</div>
+          <div style="font-size: 14px; font-weight: 600; color: #fff; margin-top: 4px; line-height: 1.45;">${evt.date}</div>
         </div>
       </div>
 
       <div style="display: flex; align-items: flex-start; gap: 12px;">
         <span style="font-size: 22px; line-height: 1;">⏰</span>
         <div>
-          <div style="font-size: 10px; color: var(--color-gold); font-weight: bold; letter-spacing: 1px;">WAKTU</div>
-          <div style="font-size: 13px; font-weight: bold; color: #fff; margin-top: 4px; line-height: 1.4;">${evt.time}</div>
+          <div style="font-size: 10.5px; color: var(--color-gold); font-weight: 700; letter-spacing: 1px;">WAKTU</div>
+          <div style="font-size: 14px; font-weight: 600; color: #fff; margin-top: 4px; line-height: 1.45;">${evt.time}</div>
         </div>
       </div>
 
       <div style="display: flex; align-items: flex-start; gap: 12px;">
         <span style="font-size: 22px; line-height: 1;">📍</span>
         <div>
-          <div style="font-size: 10px; color: var(--color-gold); font-weight: bold; letter-spacing: 1px;">LOKASI ACARA</div>
-          <div style="font-size: 13px; font-weight: bold; color: #fff; margin-top: 4px; line-height: 1.4;">${venue.name}</div>
-          <div style="font-size: 11px; color: #e2dad0; margin-top: 4px; line-height: 1.5;">${venue.address}</div>
+          <div style="font-size: 10.5px; color: var(--color-gold); font-weight: 700; letter-spacing: 1px;">LOKASI ACARA</div>
+          <div style="font-size: 14px; font-weight: 600; color: #fff; margin-top: 4px; line-height: 1.45;">${venue.name}</div>
+          <div style="font-size: 12.5px; color: #e2dad0; margin-top: 4px; line-height: 1.55;">${venue.address}</div>
         </div>
       </div>
     </div>
@@ -83,7 +81,7 @@ export function createLocationModal() {
 
   return createModal({
     id: 'location-modal',
-    title: '📍 LOKASI & JADWAL ACARA',
+    title: '📍 Waktu dan Lokasi Acara',
     content
   });
 }

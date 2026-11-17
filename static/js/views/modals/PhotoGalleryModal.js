@@ -121,12 +121,13 @@ export function createPhotoGalleryModal() {
         border: 1px solid rgba(212, 175, 55, 0.35);
         border-radius: 10px;
         padding: 26px 18px;
+        font-family: var(--font-sans);
       ">
         <div style="font-size: 30px; margin-bottom: 10px;">🖼️</div>
-        <p style="font-size: 12.5px; color: #f5eedc; line-height: 1.6; margin: 0 0 8px;">
+        <p style="font-size: 13.5px; color: #f5eedc; line-height: 1.6; margin: 0 0 8px;">
           Foto-foto kami akan segera hadir di sini.
         </p>
-        <p style="font-size: 10.5px; color: #ffbe97; line-height: 1.45; margin: 0; opacity: 0.9;">
+        <p style="font-size: 11.5px; color: #ffbe97; line-height: 1.5; margin: 0; opacity: 0.9;">
           Unggah foto ke folder <code>static/images/gallery/</code> untuk menampilkannya secara otomatis.
         </p>
       </div>

@@ -88,10 +88,10 @@ export class FoodCourt {
       ctx.fillStyle = '#f5e6a3';
       ctx.font = 'bold 26px serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🍜 KULINER FAVORIT KAMI ☕', 256, 48);
+      ctx.fillText('🍽️ CITA RASA FAVORIT', 256, 52);
       ctx.fillStyle = '#ffbe97';
       ctx.font = '18px sans-serif';
-      ctx.fillText('Mie Ayam Jamur • Es Kopi Aren • Pisang Karamel', 256, 88);
+      ctx.fillText('Adjie & Daulika', 256, 90);
     }
     const boardTex = new THREE.CanvasTexture(canvas);
     const signBoard = new THREE.Mesh(

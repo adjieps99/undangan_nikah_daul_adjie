@@ -34,22 +34,20 @@ export function createListeningStationModal() {
         <span style="font-size: 28px;">🎧</span>
       </div>
 
-      <div style="font-size: 10px; letter-spacing: 2px; color: #1ed760; font-weight: bold;">
-        PLAYLIST ADJIE &amp; DAULIKA
-      </div>
-      <h3 id="current-track-title" style="font-size: 14px; color: #fff; margin: 4px 0 2px;"></h3>
-      <div id="current-track-artist" style="font-size: 11px; color: #ffbe97; margin-bottom: 8px;"></div>
+      <h3 id="current-track-title" style="font-family: var(--font-serif); font-size: 17px; color: #fff; margin: 2px 0 3px;"></h3>
+      <div id="current-track-artist" style="font-family: var(--font-sans); font-size: 12.5px; color: #ffbe97; margin-bottom: 8px;"></div>
 
       <p id="track-availability-note" style="
-        font-size: 10.5px;
+        font-family: var(--font-sans);
+        font-size: 12px;
         color: #f5eedc;
         opacity: 0.92;
         margin: 0 0 10px;
-        line-height: 1.45;
+        line-height: 1.5;
       ">Memeriksa file audio...</p>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <span id="track-time-cur" style="font-size: 10px; color: #ccc; font-family: monospace;">--:--</span>
+        <span id="track-time-cur" style="font-size: 11px; color: #ccc; font-family: monospace;">--:--</span>
         <input type="range" id="track-seek-bar" min="0" max="100" value="0" disabled style="
           flex: 1;
           margin: 0 10px;
@@ -58,7 +56,7 @@ export function createListeningStationModal() {
           height: 4px;
           opacity: 0.45;
         ">
-        <span id="track-time-dur" style="font-size: 10px; color: #888; font-family: monospace;">--:--</span>
+        <span id="track-time-dur" style="font-size: 11px; color: #888; font-family: monospace;">--:--</span>
       </div>
 
       <div style="display: flex; justify-content: center; align-items: center; gap: 16px; margin: 10px 0 6px;">
@@ -82,19 +80,20 @@ export function createListeningStationModal() {
         <button type="button" id="next-track-btn" aria-label="Lagu berikutnya" style="background: none; border: none; color: #fff; font-size: 20px; cursor: pointer;">⏭️</button>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.08);">
+      <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);">
         <button type="button" id="station-mute-btn" style="
           background: rgba(255,255,255,0.08);
           border: 1px solid rgba(255,255,255,0.2);
           color: #f5eedc;
           border-radius: 6px;
-          padding: 3px 8px;
-          font-size: 10px;
+          padding: 4px 10px;
+          font-family: var(--font-sans);
+          font-size: 11.5px;
           cursor: pointer;
         "></button>
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 11px; color: #aaa;">🔊</span>
-          <input type="range" id="track-volume-slider" min="0" max="1" step="0.05" value="0.78" style="
+          <input type="range" id="track-volume-slider" aria-label="Volume musik" min="0" max="1" step="0.05" value="0.78" style="
             width: 70px;
             accent-color: #1ed760;
             cursor: pointer;
@@ -104,7 +103,7 @@ export function createListeningStationModal() {
     </div>
 
     <div>
-      <h5 style="font-size: 11px; letter-spacing: 1px; color: var(--color-gold); margin-bottom: 8px;">
+      <h5 style="font-family: var(--font-sans); font-size: 11.5px; letter-spacing: 1px; color: var(--color-gold); margin-bottom: 8px; font-weight: 700;">
         📜 DAFTAR LAGU PILIHAN KAMI
       </h5>
       <div id="playlist-rows" style="display: flex; flex-direction: column; gap: 6px;"></div>

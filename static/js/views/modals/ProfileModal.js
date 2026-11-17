@@ -29,12 +29,9 @@ export function createProfileModal() {
   };
 
   content.innerHTML = `
-    <div style="text-align: center; margin-bottom: 16px;">
-      <span style="font-size: 10px; letter-spacing: 2px; color: var(--color-gold); font-weight: bold;">
-        ADJIE &amp; DAULIKA
-      </span>
-      <p style="font-size: 11px; color: #ffbe97; margin: 6px 0 0; line-height: 1.45;">
-        Dengan memohon rahmat dan ridho Tuhan Yang Maha Esa, izinkan kami memperkenalkan diri.
+    <div style="text-align: center; margin-bottom: 18px;">
+      <p style="font-family: var(--font-sans); font-size: 13px; color: #ffbe97; margin: 0; line-height: 1.55;">
+        Dengan rahmat dan ridho Allah SWT, izinkan kami memperkenalkan dua hati di hari bahagia ini.
       </p>
     </div>
 
@@ -52,15 +49,12 @@ export function createProfileModal() {
         <div class="profile-avatar" style="margin-bottom: 10px;">
           ${generateAvatarSVG(groomAvatarConfig, 84)}
         </div>
-        <div style="font-size: 9.5px; letter-spacing: 1px; color: var(--color-gold); font-weight: bold; margin-bottom: 4px;">
+        <div style="font-family: var(--font-sans); font-size: 10.5px; letter-spacing: 1.2px; color: var(--color-gold); font-weight: 700; margin-bottom: 6px;">
           MEMPELAI PRIA
         </div>
-        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 15px; color: #fff; margin-bottom: 6px;">${groom.fullName}</h4>
-        <div style="font-size: 11px; color: #f5eedc; line-height: 1.5; margin-bottom: 8px;">
+        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 17px; color: #fff; margin-bottom: 8px; line-height: 1.3;">${groom.fullName}</h4>
+        <div style="font-family: var(--font-sans); font-size: 12.5px; color: #f5eedc; line-height: 1.55;">
           ${groom.parents}
-        </div>
-        <div style="font-size: 10px; color: #ffbe97;">
-          ${groom.attireLabel || 'Beskap Hitam Klasik'}
         </div>
       </div>
 
@@ -77,15 +71,12 @@ export function createProfileModal() {
         <div class="profile-avatar" id="bride-avatar-slot" style="margin-bottom: 10px;">
           ${generateAvatarSVG(brideAvatarConfig, 84)}
         </div>
-        <div style="font-size: 9.5px; letter-spacing: 1px; color: #ffb6c1; font-weight: bold; margin-bottom: 4px;">
+        <div style="font-family: var(--font-sans); font-size: 10.5px; letter-spacing: 1.2px; color: #ffb6c1; font-weight: 700; margin-bottom: 6px;">
           MEMPELAI WANITA
         </div>
-        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 15px; color: #fff; margin-bottom: 6px;">${bride.fullName}</h4>
-        <div style="font-size: 11px; color: #f5eedc; line-height: 1.5; margin-bottom: 8px;">
+        <h4 class="profile-name" style="font-family: var(--font-serif); font-size: 17px; color: #fff; margin-bottom: 8px; line-height: 1.3;">${bride.fullName}</h4>
+        <div style="font-family: var(--font-sans); font-size: 12.5px; color: #f5eedc; line-height: 1.55;">
           ${bride.parents}
-        </div>
-        <div style="font-size: 10px; color: #ffbe97;">
-          ${bride.attireLabel || 'Kebaya Putih Anggun'}
         </div>
       </div>
     </div>

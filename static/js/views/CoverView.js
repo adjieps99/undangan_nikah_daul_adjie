@@ -25,17 +25,15 @@ export class CoverView {
     }
     viewContainer.appendChild(sparkles);
 
-    // Official Wedding Identity Header
+    // Single Romantic Welcoming Heading
     const headerTitle = document.createElement('div');
     headerTitle.className = 'cover-header-badge';
     headerTitle.innerHTML = `
-      <div class="wedding-names-banner">ADJIE &amp; DAULIKA</div>
-      <div class="garden-brand-title">THE GARDEN OF US</div>
-      <div class="garden-brand-tagline">"A little world, made of our story."</div>
+      <h1 class="cover-welcome-heading">Selamat datang di hari bahagia Adjie &amp; Daulika</h1>
     `;
     viewContainer.appendChild(headerTitle);
 
-    // Physically Closed Interactive Envelope Component
+    // Single Interactive Envelope Component
     const envelopeWrapper = document.createElement('div');
     envelopeWrapper.className = 'envelope-wrapper';
 
@@ -43,13 +41,10 @@ export class CoverView {
     envelopeBox.className = `envelope-interactive ${this.isOpen ? 'open' : ''}`;
 
     envelopeBox.innerHTML = `
-      <div class="envelope-back-plate"></div>
-
-      <!-- Letter Clipping Sleeve keeps letter physically hidden inside envelope until open -->
+      <!-- Letter Clipping Sleeve keeps letter physically inside closed envelope -->
       <div class="envelope-pocket-clip">
         <div class="envelope-letter-sheet">
           <div class="letter-top-ornament">✦ ✦ ✦</div>
-          <div class="letter-badge">THE GARDEN OF US</div>
           <div class="letter-guest-to">Untukmu,</div>
           <div class="letter-guest-recipient"></div>
           <p class="letter-body-text">
@@ -61,15 +56,15 @@ export class CoverView {
         </div>
       </div>
 
-      <!-- Front Bottom Pocket (Physically conceals bottom & sides of closed envelope) -->
+      <!-- Front Bottom Pocket -->
       <div class="envelope-front-pocket"></div>
       <div class="envelope-pocket-crease-left"></div>
       <div class="envelope-pocket-crease-right"></div>
 
-      <!-- Top Flap & Golden Seal -->
+      <!-- Top Flap & Wax Seal -->
       <div class="envelope-top-flap"></div>
       <button type="button" class="envelope-wax-seal" id="envelope-open-btn" aria-label="Buka amplop undangan pernikahan Adjie & Daulika">
-        <span class="wax-seal-icon">💌</span>
+        <span class="wax-seal-icon" aria-hidden="true">♥</span>
         <span class="wax-seal-text">BUKA</span>
       </button>
     `;
@@ -80,11 +75,17 @@ export class CoverView {
       recipientEl.textContent = state.guestName || 'Tamu Undangan';
     }
 
+    // Clear conversational hint beneath envelope (declared before openEnvelope for clean toggle)
+    const hintText = document.createElement('div');
+    hintText.className = `envelope-instruction-hint${this.isOpen ? ' is-hidden' : ''}`;
+    hintText.textContent = 'Ketuk amplop untuk membuka undangan.';
+
     const openTriggerBtn = envelopeBox.querySelector('#envelope-open-btn');
     const openEnvelope = () => {
       if (!this.isOpen) {
         this.isOpen = true;
         envelopeBox.classList.add('open');
+        hintText.classList.add('is-hidden');
         if (openTriggerBtn) {
           openTriggerBtn.setAttribute('aria-hidden', 'true');
           openTriggerBtn.setAttribute('tabindex', '-1');
@@ -116,11 +117,6 @@ export class CoverView {
 
     envelopeWrapper.appendChild(envelopeBox);
     viewContainer.appendChild(envelopeWrapper);
-
-    // Clear conversational hint beneath envelope
-    const hintText = document.createElement('div');
-    hintText.className = 'envelope-instruction-hint';
-    hintText.textContent = 'Ketuk amplop untuk membuka undangan.';
     viewContainer.appendChild(hintText);
 
     return viewContainer;

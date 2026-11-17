@@ -91,6 +91,7 @@ class GameState {
     if (isLocal || isDebug) {
       const p = params.get('phase');
       if (p === 'hall' || p === 'main_hall') return PHASES.MAIN_HALL;
+      if (p === 'opening' || p === 'opening_video') return PHASES.OPENING_VIDEO;
       if (p === 'exploration' || p === 'rsvp' || p === 'closing') return PHASES.EXPLORATION;
       if (p === 'avatar' || p === 'avatar_creator') return PHASES.AVATAR_CREATOR;
       if (params.has('view')) return PHASES.EXPLORATION;

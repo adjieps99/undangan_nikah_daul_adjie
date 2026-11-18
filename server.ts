@@ -190,12 +190,21 @@ app.get('/api/gallery', (_req: Request, res: Response) => {
       return res.json({ status: 'ok', photos: [] });
     }
     let metadataMap: Record<string, { caption?: string; title?: string }> = {};
+    const metadataByStem: Record<string, { caption?: string; title?: string }> = {};
     const metadataPath = path.join(galleryDir, 'gallery.json');
     if (fs.existsSync(metadataPath)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           metadataMap = parsed;
+          for (const [key, value] of Object.entries(parsed)) {
+            if (value && typeof value === 'object') {
+              const stem = path.parse(key).name.toLowerCase();
+              if (stem && !metadataByStem[stem]) {
+                metadataByStem[stem] = value as { caption?: string; title?: string };
+              }
+            }
+          }
         }
       } catch {
         // Ignore malformed optional gallery.json cleanly
@@ -209,7 +218,8 @@ app.get('/api/gallery', (_req: Request, res: Response) => {
       .sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
 
     const photos = files.map((filename, index) => {
-      const meta = metadataMap[filename];
+      const stem = path.parse(filename).name.toLowerCase();
+      const meta = metadataMap[filename] ?? metadataByStem[stem];
       const rawCaption = meta && typeof meta.caption === 'string' ? cleanText(meta.caption, 180) : '';
       const rawTitle = meta && typeof meta.title === 'string' ? cleanText(meta.title, 80) : '';
       return {

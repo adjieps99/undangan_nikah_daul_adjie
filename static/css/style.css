@@ -291,50 +291,48 @@ html, body {
   box-shadow: 3px 3px 0 #000;
 }
 
-/* Front Pocket (Aligned cleanly edge-to-edge inside envelope shell) */
-.envelope-front-pocket {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 134px;
-  background: #c89c33;
-  clip-path: polygon(0% 0%, 50% 35%, 100% 0%, 100% 100%, 0% 100%);
-  z-index: 4;
-}
-
+/* Front Envelope Body & Real Folded Flaps (Left/Right side folds, Upward bottom pocket, Single downward top flap) */
 .envelope-pocket-crease-left {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 50%;
-  height: 134px;
-  background: #b38827;
-  clip-path: polygon(0% 0%, 100% 100%, 0% 100%);
-  z-index: 5;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #b58923;
+  clip-path: polygon(0% 0%, 50% 50%, 0% 100%);
+  z-index: 4;
   pointer-events: none;
 }
 
 .envelope-pocket-crease-right {
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 50%;
-  height: 134px;
-  background: #aa7f20;
-  clip-path: polygon(100% 0%, 100% 100%, 0% 100%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #ab801e;
+  clip-path: polygon(100% 0%, 100% 100%, 50% 50%);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.envelope-front-pocket {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, #cf9f34 0%, #bf9128 100%);
+  clip-path: polygon(0% 100%, 50% 42%, 100% 100%);
   z-index: 5;
   pointer-events: none;
 }
 
-/* Top Flap */
+/* Single Top Flap */
 .envelope-top-flap {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  height: 94px;
-  background: #be932d;
+  height: 118px;
+  background: linear-gradient(180deg, #d8ab3d 0%, #c6982b 100%);
   clip-path: polygon(0% 0%, 100% 0%, 50% 100%);
   transform-origin: top center;
   transition: transform 0.45s ease, z-index 0.2s, opacity 0.35s ease;
@@ -351,7 +349,7 @@ html, body {
 /* Wax Seal on Flap tip (native button with heart crest, avoiding duplicate envelope icon) */
 .envelope-wax-seal {
   position: absolute;
-  top: 64px;
+  top: 84px;
   left: 50%;
   transform: translateX(-50%);
   width: 58px;
@@ -430,6 +428,9 @@ html, body {
   align-items: center;
   width: 100%;
   max-width: 560px;
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 16px;
   gap: 16px;
   z-index: 2;
@@ -446,8 +447,78 @@ html, body {
 }
 
 @media (max-width: 520px) {
+  .avatar-view-container {
+    padding: 12px 12px 20px;
+    gap: 10px;
+  }
+  .avatar-header h2 {
+    font-size: 13px !important;
+    line-height: 1.35;
+  }
+  .avatar-header p {
+    font-size: 10px !important;
+    margin-top: 4px !important;
+  }
   .avatar-main-grid {
     flex-direction: column;
+    gap: 10px;
+  }
+  .avatar-preview-box {
+    display: grid !important;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    align-items: center;
+    justify-items: center;
+    column-gap: 12px;
+    row-gap: 6px;
+    padding: 10px 14px !important;
+  }
+  .avatar-preview-box .avatar-svg-bounce {
+    grid-row: 1 / 3;
+    grid-column: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 96px;
+    height: 96px;
+  }
+  .avatar-preview-box .avatar-svg-bounce svg {
+    width: 96px;
+    height: 96px;
+  }
+  .avatar-preview-box .avatar-preview-name {
+    grid-row: 1;
+    grid-column: 2;
+    align-self: end;
+    font-size: 14px;
+  }
+  .avatar-preview-box .avatar-rand-btn {
+    grid-row: 2;
+    grid-column: 2;
+    align-self: start;
+  }
+  .avatar-options-box {
+    padding: 12px !important;
+    gap: 8px !important;
+  }
+  .avatar-tabs-row {
+    padding-bottom: 6px !important;
+  }
+  .avatar-tab-btn {
+    font-size: 8px !important;
+    padding: 6px 2px !important;
+  }
+  .option-pill {
+    padding: 7px 4px !important;
+    font-size: 8.5px !important;
+  }
+  .avatar-actions-row p {
+    font-size: 10px !important;
+    margin-bottom: 6px !important;
+  }
+  .avatar-actions-row .retro-btn {
+    padding: 11px 16px;
+    font-size: 11.5px;
   }
 }
 

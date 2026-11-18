@@ -4,6 +4,7 @@ import {
   STYLIZED_V3_PROPORTIONS,
   computeV3HeadVertex,
   sampleHijabAperturePoint,
+  sampleHijabWrapPoint,
   sampleScalpHairlinePoint
 } from './StylizedMathV3.js';
 
@@ -536,16 +537,16 @@ function createV3HairLock(points, radius = 0.011, tubularSegments = 18) {
 function createV3BackHairMass(wavy = false) {
   const rings = wavy
     ? [
-        { y: -0.275, rx: 0.132, rz: 0.058, offsetZ: -0.205, squareness: 0.84 },
-        { y: -0.180, rx: 0.146, rz: 0.064, offsetZ: -0.205, squareness: 0.86 },
-        { y: -0.065, rx: 0.141, rz: 0.062, offsetZ: -0.195, squareness: 0.88 },
-        { y: 0.075, rx: 0.126, rz: 0.058, offsetZ: -0.178, squareness: 0.90 }
+        { y: -0.260, rx: 0.136, rz: 0.056, offsetZ: -0.106, squareness: 0.85 },
+        { y: -0.145, rx: 0.140, rz: 0.060, offsetZ: -0.098, squareness: 0.87 },
+        { y: -0.035, rx: 0.132, rz: 0.064, offsetZ: -0.088, squareness: 0.89 },
+        { y: 0.055, rx: 0.118, rz: 0.062, offsetZ: -0.074, squareness: 0.90 }
       ]
     : [
-        { y: -0.280, rx: 0.132, rz: 0.058, offsetZ: -0.205, squareness: 0.86 },
-        { y: -0.175, rx: 0.145, rz: 0.064, offsetZ: -0.205, squareness: 0.88 },
-        { y: -0.045, rx: 0.139, rz: 0.062, offsetZ: -0.194, squareness: 0.90 },
-        { y: 0.075, rx: 0.122, rz: 0.056, offsetZ: -0.180, squareness: 0.92 }
+        { y: -0.268, rx: 0.138, rz: 0.056, offsetZ: -0.108, squareness: 0.86 },
+        { y: -0.145, rx: 0.138, rz: 0.060, offsetZ: -0.098, squareness: 0.88 },
+        { y: -0.030, rx: 0.130, rz: 0.064, offsetZ: -0.088, squareness: 0.90 },
+        { y: 0.055, rx: 0.116, rz: 0.062, offsetZ: -0.074, squareness: 0.92 }
       ];
   return createParametricLoftGeometry(rings, 18);
 }
@@ -569,9 +570,13 @@ function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
       metalness: 0.0
     });
 
-    // A close-fitting fabric crown. It follows the skull rather than using a large sphere/hood.
-    const hoodGeo = createOpenFaceScalpShell(0.009, true, 0.004);
-    headGroup.add(new THREE.Mesh(hoodGeo, hijabMat));
+    // Seamless full-head wrap covering forehead, temples, ears, crown & back occiput from face oval
+    const hoodGeo = createParametricSurfaceGrid(
+      40,
+      20,
+      (uNorm, t) => sampleHijabWrapPoint(uNorm * Math.PI * 2, t, true),
+      { flipWinding: true }
+    );
 
     // A clear oval opening around the complete face: forehead, cheeks, jaw, and chin stay visible.
     const framePoints = [];
@@ -581,38 +586,25 @@ function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
       framePoints.push(new THREE.Vector3(p.x, p.y, p.z));
     }
     const frameCurve = new THREE.CatmullRomCurve3(framePoints, true, 'centripetal');
-    const frameGeo = new THREE.TubeGeometry(frameCurve, 64, 0.0034, 6, true);
+    const frameGeo = new THREE.TubeGeometry(frameCurve, 64, 0.0040, 6, true);
     headGroup.add(new THREE.Mesh(frameGeo, trimMat));
 
-    // Two separate pashmina panels. Their inner edges sit outside the cheeks;
-    // the fabric then falls outward and backward to the shoulders.
-    const drapePanels = [];
-    [-1, 1].forEach((side) => {
-      const panel = createParametricSurfaceGrid(14, 24, (u, v) => {
-        const x = side * (0.104 + 0.052 * u + 0.008 * Math.sin(v * Math.PI));
-        const y = 0.085 - 0.225 * v + 0.012 * Math.sin(u * Math.PI) * Math.sin(v * Math.PI);
-        const z = 0.074 - 0.165 * u - 0.018 * v + 0.008 * Math.sin(u * Math.PI);
-        return { x, y, z };
-      }, { flipWinding: side < 0 });
-      drapePanels.push(panel);
-    });
-
-    // Soft cloth around the neck; kept below the chin and independent from the face mesh.
+    // Contoured 360-degree neck & upper-shoulder shawl drape tucked inside lower hijab hood
     const neckDrapeGeo = createParametricLoftGeometry([
-      { y: -0.265, rx: 0.126, rz: 0.092, offsetZ: 0.008, squareness: 0.90 },
-      { y: -0.220, rx: 0.105, rz: 0.083, offsetZ: 0.006, squareness: 0.92 },
-      { y: -0.180, rx: 0.080, rz: 0.071, offsetZ: 0.000, squareness: 0.94 },
-      { y: -0.155, rx: 0.070, rz: 0.066, offsetZ: -0.004, squareness: 0.95 }
+      { y: -0.232, rx: 0.138, rz: 0.096, offsetZ: 0.008, squareness: 0.88 },
+      { y: -0.185, rx: 0.104, rz: 0.085, offsetZ: 0.004, squareness: 0.90 },
+      { y: -0.142, rx: 0.076, rz: 0.074, offsetZ: -0.004, squareness: 0.93 },
+      { y: -0.104, rx: 0.068, rz: 0.068, offsetZ: -0.008, squareness: 0.95 }
     ], 24, { capBottom: true, capTop: false });
 
     headGroup.add(new THREE.Mesh(
-      mergeSafeGeometries([...drapePanels, neckDrapeGeo]),
+      mergeSafeGeometries([hoodGeo, neckDrapeGeo]),
       hijabMat
     ));
 
-    const pin = new THREE.OctahedronGeometry(0.0065, 1);
+    const pin = new THREE.OctahedronGeometry(0.0075, 1);
     pin.scale(1.0, 1.0, 0.55);
-    pin.translate(0.112, -0.145, 0.055);
+    pin.translate(0.048, -0.172, 0.088);
     headGroup.add(new THREE.Mesh(pin, accentMat));
     return;
   }
@@ -640,15 +632,13 @@ function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
   }
 
   if (style === 'bun') {
-    hairGeos.push(createV3BackHairMass(false));
-
     const bun = new THREE.SphereGeometry(0.052, 16, 12);
-    bun.scale(1.08, 0.90, 0.88);
-    bun.translate(0, 0.052, -0.205);
+    bun.scale(1.08, 0.90, 0.84);
+    bun.translate(0, 0.048, -0.142);
     hairGeos.push(bun);
 
-    const tie = new THREE.TorusGeometry(0.037, 0.005, 7, 18);
-    tie.translate(0, 0.052, -0.198);
+    const tie = new THREE.TorusGeometry(0.036, 0.006, 7, 18);
+    tie.translate(0, 0.048, -0.128);
     hairGeos.push(tie);
 
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
@@ -659,12 +649,12 @@ function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
     hairGeos.push(createV3BackHairMass(false));
     [-1, 1].forEach((side) => {
       hairGeos.push(createV3HairLock([
-        [side * 0.120, 0.090, -0.030],
-        [side * 0.132, 0.018, -0.060],
-        [side * 0.140, -0.090, -0.092],
-        [side * 0.142, -0.205, -0.125],
-        [side * 0.135, -0.275, -0.145]
-      ], 0.0125, 20));
+        [side * 0.084, 0.078, 0.034],
+        [side * 0.114, 0.022, 0.010],
+        [side * 0.130, -0.072, -0.036],
+        [side * 0.138, -0.190, -0.076],
+        [side * 0.132, -0.265, -0.098]
+      ], 0.012, 20));
     });
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
     return;
@@ -674,38 +664,24 @@ function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
     hairGeos.push(createV3BackHairMass(true));
     [-1, 1].forEach((side) => {
       hairGeos.push(createV3HairLock([
-        [side * 0.122, 0.085, -0.035],
-        [side * 0.139, 0.015, -0.070],
-        [side * 0.132, -0.070, -0.100],
-        [side * 0.145, -0.155, -0.128],
-        [side * 0.137, -0.265, -0.150]
+        [side * 0.082, 0.078, 0.032],
+        [side * 0.116, 0.020, 0.006],
+        [side * 0.130, -0.065, -0.036],
+        [side * 0.125, -0.148, -0.072],
+        [side * 0.138, -0.245, -0.098]
       ], 0.0105, 20));
       hairGeos.push(createV3HairLock([
-        [side * 0.132, 0.055, -0.080],
-        [side * 0.145, -0.020, -0.105],
-        [side * 0.136, -0.115, -0.132],
-        [side * 0.148, -0.215, -0.158]
-      ], 0.0085, 18));
+        [side * 0.090, 0.062, 0.010],
+        [side * 0.124, 0.002, -0.018],
+        [side * 0.134, -0.095, -0.056],
+        [side * 0.142, -0.210, -0.102]
+      ], 0.009, 18));
     });
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
     return;
   }
 
-  // Default short hairstyle: clean scalp, one restrained front sweep above the eyebrows,
-  // and short sideburns tucked outside the cheeks. No crown sphere or bulky front cap.
-  hairGeos.push(createV3HairLock([
-    [-0.074, 0.116, 0.086],
-    [-0.035, 0.137, 0.105],
-    [0.018, 0.132, 0.106],
-    [0.064, 0.111, 0.088]
-  ], 0.0095, 16));
-  [-1, 1].forEach((side) => {
-    hairGeos.push(createV3HairLock([
-      [side * 0.118, 0.070, 0.010],
-      [side * 0.122, 0.026, 0.000],
-      [side * 0.119, -0.018, -0.012]
-    ], 0.0065, 10));
-  });
+  // Default short hairstyle: clean open-face scalp shell with crisp hairline & nape
   headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
 }
 

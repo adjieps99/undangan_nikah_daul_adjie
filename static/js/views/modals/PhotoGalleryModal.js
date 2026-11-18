@@ -17,7 +17,7 @@ export function createPhotoGalleryModal() {
 
     <div id="gallery-grid" class="gallery-grid" style="
       display: none;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
       gap: 10px;
       margin-bottom: 12px;
     "></div>
@@ -26,51 +26,57 @@ export function createPhotoGalleryModal() {
       display: none;
       margin-top: 12px;
       padding: 12px;
-      background: rgba(14, 11, 18, 0.96);
+      background: linear-gradient(180deg, rgba(42, 27, 17, 0.98) 0%, rgba(28, 17, 10, 0.99) 100%);
       border: 1.5px solid var(--color-gold);
       border-radius: 10px;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.7);
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.72);
       position: relative;
     ">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <span id="lb-counter" style="font-size: 10px; color: var(--color-gold); font-weight: bold;"></span>
+        <span id="lb-counter" style="font-size: 11px; color: #f5e6a3; font-weight: bold; letter-spacing: 0.4px;"></span>
         <button type="button" id="lb-close-btn" style="
-          background: none;
-          border: none;
-          color: #fff;
-          font-size: 12px;
+          background: rgba(212, 175, 55, 0.14);
+          border: 1px solid rgba(212, 175, 55, 0.45);
+          border-radius: 6px;
+          color: #f5eedc;
+          font-size: 11px;
           cursor: pointer;
-          padding: 4px 8px;
+          padding: 4px 10px;
         ">✕ Tutup</button>
       </div>
 
       <div id="lb-swipe-area" style="
         position: relative;
-        min-height: 180px;
-        max-height: 300px;
+        min-height: 200px;
+        max-height: 310px;
         border-radius: 8px;
-        background: #0d0a10;
+        background: #170e08;
+        border: 1px solid rgba(212, 175, 55, 0.25);
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
+        padding: 6px;
         touch-action: pan-y;
       ">
-        <img id="lb-photo-img" alt="Foto Adjie & Daulika" style="max-width: 100%; max-height: 285px; width: auto; height: auto; object-fit: contain; display: block;">
+        <img id="lb-photo-img" alt="Foto Adjie & Daulika" style="max-width: 100%; max-height: 294px; width: auto; height: auto; object-fit: contain; display: block; border-radius: 4px;">
 
         <button type="button" id="lb-prev-btn" aria-label="Foto sebelumnya" style="
           position: absolute;
           left: 8px;
           top: 50%;
           transform: translateY(-50%);
-          background: rgba(0,0,0,0.65);
+          background: rgba(34, 21, 13, 0.82);
           border: 1px solid var(--color-gold);
-          color: #fff;
+          color: #f5e6a3;
           width: 32px;
           height: 32px;
           border-radius: 50%;
           font-size: 16px;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         ">‹</button>
 
         <button type="button" id="lb-next-btn" aria-label="Foto berikutnya" style="
@@ -78,24 +84,29 @@ export function createPhotoGalleryModal() {
           right: 8px;
           top: 50%;
           transform: translateY(-50%);
-          background: rgba(0,0,0,0.65);
+          background: rgba(34, 21, 13, 0.82);
           border: 1px solid var(--color-gold);
-          color: #fff;
+          color: #f5e6a3;
           width: 32px;
           height: 32px;
           border-radius: 50%;
           font-size: 16px;
           cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         ">›</button>
       </div>
 
       <p id="lb-caption" style="
         display: none;
         margin: 10px 4px 2px;
-        font-size: 11px;
+        padding-top: 8px;
+        border-top: 1px solid rgba(212, 175, 55, 0.22);
+        font-size: 12px;
         color: #f5eedc;
         text-align: center;
-        line-height: 1.45;
+        line-height: 1.5;
       "></p>
     </div>
   `;
@@ -117,7 +128,7 @@ export function createPhotoGalleryModal() {
     statusArea.style.display = 'block';
     statusArea.innerHTML = `
       <div style="
-        background: rgba(212, 175, 55, 0.08);
+        background: rgba(42, 27, 17, 0.85);
         border: 1px solid rgba(212, 175, 55, 0.35);
         border-radius: 10px;
         padding: 26px 18px;
@@ -127,7 +138,7 @@ export function createPhotoGalleryModal() {
         <p style="font-size: 13.5px; color: #f5eedc; line-height: 1.6; margin: 0 0 8px;">
           Foto-foto kami akan segera hadir di sini.
         </p>
-        <p style="font-size: 11.5px; color: #ffbe97; line-height: 1.5; margin: 0; opacity: 0.9;">
+        <p style="font-size: 11.5px; color: #f5e6a3; line-height: 1.5; margin: 0; opacity: 0.9;">
           Unggah foto ke folder <code>static/images/gallery/</code> untuk menampilkannya secara otomatis.
         </p>
       </div>
@@ -148,6 +159,7 @@ export function createPhotoGalleryModal() {
       lbCaption.textContent = captionText;
       lbCaption.style.display = 'block';
     } else {
+      lbCaption.textContent = '';
       lbCaption.style.display = 'none';
     }
     lightbox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -164,20 +176,57 @@ export function createPhotoGalleryModal() {
       card.className = 'gallery-card';
       card.style.cssText = `
         cursor: pointer;
-        background: rgba(255,255,255,0.06);
-        border: 1px solid rgba(212, 175, 55, 0.35);
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        text-align: left;
+        background: rgba(38, 24, 15, 0.95);
+        border: 1px solid rgba(212, 175, 55, 0.42);
         border-radius: 8px;
         overflow: hidden;
         padding: 0;
+        color: #f5eedc;
+        transition: border-color 0.15s ease, transform 0.15s ease;
+      `;
+
+      const thumbWrap = document.createElement('div');
+      thumbWrap.style.cssText = `
+        width: 100%;
         aspect-ratio: 4 / 3;
+        background: #170e08;
+        overflow: hidden;
+        border-bottom: 1px solid rgba(212, 175, 55, 0.24);
       `;
 
       const img = document.createElement('img');
       img.src = photo.url;
       img.alt = photo.caption || photo.title || `Galeri foto ${idx + 1}`;
       img.loading = 'lazy';
+      img.decoding = 'async';
       img.style.cssText = 'width: 100%; height: 100%; object-fit: cover; display: block;';
-      card.appendChild(img);
+      thumbWrap.appendChild(img);
+      card.appendChild(thumbWrap);
+
+      const captionText = photo.caption || photo.title || `Foto ${idx + 1}`;
+      const captionEl = document.createElement('p');
+      captionEl.className = 'gallery-card-caption';
+      captionEl.textContent = captionText;
+      captionEl.title = captionText;
+      captionEl.style.cssText = `
+        margin: 7px 8px 8px;
+        padding: 0;
+        font-size: 11px;
+        line-height: 1.35;
+        max-height: calc(11px * 1.35 * 3);
+        color: #f5eedc;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        word-break: break-word;
+      `;
+      card.appendChild(captionEl);
 
       card.addEventListener('click', () => showPhoto(idx));
       grid.appendChild(card);
@@ -207,20 +256,31 @@ export function createPhotoGalleryModal() {
       e.preventDefault();
       showPhoto(currentLightboxIdx + 1);
     } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
       lightbox.style.display = 'none';
     }
   };
   window.addEventListener('keydown', handleKeyDown);
 
   let touchStartX = 0;
+  let touchStartY = 0;
   lbSwipeArea.addEventListener('touchstart', (e) => {
-    touchStartX = e.changedTouches[0].screenX;
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    touchStartX = touch.screenX;
+    touchStartY = touch.screenY;
   }, { passive: true });
 
   lbSwipeArea.addEventListener('touchend', (e) => {
-    const diff = e.changedTouches[0].screenX - touchStartX;
-    if (diff > 45) showPhoto(currentLightboxIdx - 1);
-    else if (diff < -45) showPhoto(currentLightboxIdx + 1);
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.screenX - touchStartX;
+    const dy = touch.screenY - touchStartY;
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) {
+      if (dx > 0) showPhoto(currentLightboxIdx - 1);
+      else showPhoto(currentLightboxIdx + 1);
+    }
   }, { passive: true });
 
   fetch(ASSET_MANIFEST.images.gallery.apiEndpoint)

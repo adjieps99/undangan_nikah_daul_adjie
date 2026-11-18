@@ -185,6 +185,74 @@ export function sampleHijabAperturePoint(u, isFeminine = true) {
 }
 
 /**
+ * Evaluates a point on the seamless hijab wrap hood (u in [0, 2*PI], t in [0, 1])
+ * sweeping smoothly from the exact oval face aperture (t=0) over forehead, temples,
+ * ears, and crown to back occiput (t=1), with neck clearance underneath the chin.
+ */
+export function sampleHijabWrapPoint(u, t, isFeminine = true) {
+  const aperturePt = sampleHijabAperturePoint(u, isFeminine);
+  if (t <= 0) return aperturePt;
+
+  const headRx = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * (isFeminine ? 0.96 : 1.0);
+  const headRy = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y;
+  const headRz = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * (isFeminine ? 0.97 : 1.0);
+
+  let startNx = aperturePt.x / headRx;
+  let startNy = aperturePt.y / headRy;
+  let startNz = Math.max(0.18, aperturePt.z / headRz);
+  const startLen = Math.hypot(startNx, startNy, startNz) || 1;
+  startNx /= startLen;
+  startNy /= startLen;
+  startNz /= startLen;
+
+  const backRing = 0.035;
+  let targetNx = Math.sin(u) * backRing;
+  let targetNy = -0.14 + Math.cos(u) * backRing;
+  let targetNz = -0.988;
+  const targetLen = Math.hypot(targetNx, targetNy, targetNz) || 1;
+  targetNx /= targetLen;
+  targetNy /= targetLen;
+  targetNz /= targetLen;
+
+  let nx = startNx + (targetNx - startNx) * t;
+  let ny = startNy + (targetNy - startNy) * t;
+  let nz = startNz + (targetNz - startNz) * t;
+  const len = Math.hypot(nx, ny, nz) || 1;
+  nx /= len;
+  ny /= len;
+  nz /= len;
+
+  const base = computeV3HeadVertex(nx, ny, nz, isFeminine);
+  const offset = 0.0085 + 0.0045 * Math.sin(t * Math.PI * 0.85);
+  const raw = {
+    x: base.x + nx * offset,
+    y: base.y + ny * offset,
+    z: base.z + nz * offset
+  };
+
+  const blend = Math.min(1, t * 4.5);
+  let x = aperturePt.x + (raw.x - aperturePt.x) * blend;
+  let y = aperturePt.y + (raw.y - aperturePt.y) * blend;
+  let z = aperturePt.z + (raw.z - aperturePt.z) * blend;
+
+  if (y < -0.072) {
+    const neckPivotZ = -0.008;
+    const dx = x;
+    const dz = z - neckPivotZ;
+    const rHoriz = Math.hypot(dx, dz) || 1e-4;
+    const minNeckR = 0.072 + Math.min(0.03, Math.max(0, -0.095 - y) * 0.35);
+    if (rHoriz < minNeckR) {
+      const push = (minNeckR - rHoriz) * blend;
+      const scale = (rHoriz + push) / rHoriz;
+      x = dx * scale;
+      z = neckPivotZ + dz * scale;
+    }
+  }
+
+  return { x, y, z };
+}
+
+/**
  * Evaluates a point on the open-face scalp hairline shell (angle u in [-PI, PI], t in [0, 1] from hairline to occiput).
  * u = 0 is center forehead hairline; u = ±PI is center nape of neck.
  * Strictly keeps the entire forehead, eyes, brows, nose, and cheeks clear!

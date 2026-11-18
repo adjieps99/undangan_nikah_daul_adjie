@@ -89,8 +89,23 @@ export class PhotoGallery {
         data.photos.slice(0, this.frameMeshes.length).forEach((photo, idx) => {
           loader.load(photo.url, (tex) => {
             tex.colorSpace = THREE.SRGBColorSpace;
+            tex.minFilter = THREE.LinearMipmapLinearFilter;
+            tex.needsUpdate = true;
             const targetMesh = this.frameMeshes[idx];
             if (!targetMesh) return;
+
+            const imgWidth = tex.image?.naturalWidth || tex.image?.width || 0;
+            const imgHeight = tex.image?.naturalHeight || tex.image?.height || 0;
+            if (imgWidth > 0 && imgHeight > 0) {
+              const frameAspect = 1.4 / 1.1;
+              const imgAspect = imgWidth / imgHeight;
+              if (imgAspect > frameAspect) {
+                targetMesh.scale.set(1, frameAspect / imgAspect, 1);
+              } else {
+                targetMesh.scale.set(imgAspect / frameAspect, 1, 1);
+              }
+            }
+
             targetMesh.material?.dispose?.();
             targetMesh.material = new THREE.MeshLambertMaterial({ map: tex, color: '#ffffff' });
           });

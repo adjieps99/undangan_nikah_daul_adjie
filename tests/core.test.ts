@@ -34,11 +34,9 @@ import {
 } from '../static/js/characters/StylizedMath.js';
 import {
   STYLIZED_V3_PROPORTIONS,
-  computeV3FaceTint,
   computeV3HeadVertex,
   resolveV3SilhouetteProfile,
   sampleHijabAperturePoint,
-  sampleHijabHoodPoint,
   sampleScalpHairlinePoint
 } from '../static/js/characters/StylizedMathV3.js';
 
@@ -478,22 +476,33 @@ test('StylizedMathV3 enforces ~7.18-heads natural human proportions, SeatingAnch
   const hijabRightEps = sampleHijabAperturePoint(1e-4, true);
   assert.ok(Math.abs(hijabRightEps.x - hijabLeftEps.x) < 1e-4);
 
-  // Spherical hijab hood must strictly wrap outside top crown & back occiput (zero bald skull clipping!)
-  const hijabCrown = sampleHijabHoodPoint(0, 0.30, true);
-  const hijabBack = sampleHijabHoodPoint(0, 0.95, true);
-  assert.ok(hijabCrown.y > STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y, `Crown hijab y (${hijabCrown.y}) must exceed skull top (${STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y})`);
-  assert.ok(hijabBack.z < -STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z, `Back hijab z (${hijabBack.z}) must wrap behind occiput`);
-  for (const tSample of [0.15, 0.30, 0.50, 0.75]) {
-    const pt = sampleHijabHoodPoint(0, tSample, true);
-    const normR = Math.hypot(
-      pt.x / (STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * 0.96),
-      pt.y / STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y,
-      pt.z / (STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * 0.97)
-    );
-    assert.ok(normR > 1.04, `Hijab at t=${tSample} must stay outside skull (normR=${normR})`);
-  }
+  // Scalp longitudes must remain distinct at the crown instead of collapsing toward the back.
+  const crownSamples = [0, Math.PI / 2, Math.PI, Math.PI * 1.5]
+    .map((u) => sampleScalpHairlinePoint(u, 1, 0.008, false));
+  crownSamples.forEach((point) => {
+    assert.ok(point.y > STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y - 0.002);
+  });
+  assert.ok(crownSamples[1].x > 0);
+  assert.ok(crownSamples[3].x < 0);
+  assert.ok(crownSamples[0].z > 0);
+  assert.ok(crownSamples[2].z < 0);
 
-  // Subtle facial warmth tinting
-  const cheekTint = computeV3FaceTint(0.44, -0.12, 0.88);
-  assert.ok(cheekTint.r > cheekTint.g && cheekTint.r > 1.0);
+  const frontMeridian = sampleScalpHairlinePoint(0, 0.62, 0.008, false);
+  const sideMeridian = sampleScalpHairlinePoint(Math.PI / 2, 0.62, 0.008, false);
+  assert.ok(
+    Math.hypot(frontMeridian.x - sideMeridian.x, frontMeridian.z - sideMeridian.z) > 0.02,
+    'Scalp meridians must remain separated through the crown transition'
+  );
+
+  // The face opening remains on the front surface and is symmetric from left to right.
+  for (let i = 0; i < 32; i++) {
+    const point = sampleHijabAperturePoint((i / 32) * Math.PI * 2, true);
+    assert.ok(Number.isFinite(point.x) && Number.isFinite(point.y) && Number.isFinite(point.z));
+    assert.ok(point.z > 0, 'Hijab aperture must remain in front of the face');
+  }
+  const right = sampleHijabAperturePoint(Math.PI / 2, true);
+  const left = sampleHijabAperturePoint(Math.PI * 1.5, true);
+  assert.ok(Math.abs(right.x + left.x) < 1e-6);
+  assert.ok(Math.abs(right.y - left.y) < 1e-6);
+  assert.ok(Math.abs(right.z - left.z) < 1e-6);
 });

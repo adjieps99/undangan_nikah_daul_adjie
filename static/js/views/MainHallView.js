@@ -924,7 +924,7 @@ export class MainHallView {
       hairStyle: 'short',
       outfit: 'beskap_hitam',
       accessory: 'none'
-    }, { role: 'groom' });
+    }, { role: 'groom', proceduralVersion: 'v3' });
     groomAvatar.shadow.visible = false;
     groomAvatar.setSitting(true, groomPose);
     groomAvatar.group.position.set(groomPose.rootPosition.x, groomPose.rootPosition.y, groomPose.rootPosition.z);
@@ -945,7 +945,7 @@ export class MainHallView {
       hairStyle: 'long',
       outfit: 'kebaya_putih',
       accessory: 'flower'
-    }, { role: 'bride' });
+    }, { role: 'bride', proceduralVersion: 'v3' });
     brideAvatar.shadow.visible = false;
     brideAvatar.setSitting(true, bridePose);
     brideAvatar.group.position.set(bridePose.rootPosition.x, bridePose.rootPosition.y, bridePose.rootPosition.z);
@@ -1096,7 +1096,7 @@ export class MainHallView {
             hairStyle: style.hairStyle,
             outfit: style.outfit,
             accessory: style.accessory
-          }, { role: 'guest', enableOptionalGlb: false });
+          }, { role: 'guest', enableOptionalGlb: false, proceduralVersion: 'v3' });
           guestAvatar.shadow.visible = false;
           guestAvatar.setSitting(true, guestPose);
           guestAvatar.group.position.set(guestPose.rootPosition.x, guestPose.rootPosition.y, guestPose.rootPosition.z);

@@ -83,7 +83,7 @@ export class AdjiePrototypeView {
     hud.style.cssText = 'position:absolute;top:16px;left:16px;right:16px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:12px;pointer-events:none;z-index:10;';
     hud.innerHTML = `
       <div style="pointer-events:auto;background:rgba(24,20,19,0.92);border:1px solid rgba(212,175,55,0.45);border-radius:10px;padding:12px 16px;color:#f7f2ea;max-width:460px;">
-        <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#d4af37;font-weight:700;">Phase 16E — Natural Human Procedural Studio</div>
+        <div style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#d4af37;font-weight:700;">Phase 16F — Clean Head & Hair Studio</div>
         <div style="font-size:17px;font-weight:700;margin-top:3px;">Adjie &amp; Daulika — Avatar Character Inspector</div>
         <div id="adjie-proto-status" style="font-size:12px;color:#e4dacb;margin-top:6px;line-height:1.45;">Menyiapkan karakter...</div>
         <div id="adjie-proto-telemetry" style="font-size:11px;color:#d4af37;margin-top:6px;font-family:monospace;">Calls: - | Tris: - | Geos: - | Tex: - | FPS: -</div>

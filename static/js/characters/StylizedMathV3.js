@@ -1,5 +1,5 @@
 /**
- * StylizedMathV3 - Phase 16E Natural Stylized Human Anatomy, Craniofacial Sculpting & Open-Face Hairline Math
+ * StylizedMathV3 - Phase 16F clean head, scalp, and open-face hijab math
  * Pure ES module (zero Three.js imports) so all proportions and face-clearance invariants are unit-tested.
  */
 
@@ -22,7 +22,7 @@ export const STYLIZED_V3_PROPORTIONS = Object.freeze({
   HAIRLINE_CENTER_Y: 0.086,    // Forehead hairline strictly above eyebrows (0.042)
   HIJAB_APERTURE_RX: 0.106,    // Clears cheekbones & eyebrows laterally
   HIJAB_APERTURE_TOP_Y: 0.088, // Clears forehead & brows cleanly
-  HIJAB_APERTURE_BOT_Y: -0.128 // Tucks cleanly right beneath jawline so chin stays visible
+  HIJAB_APERTURE_BOT_Y: -0.138 // Sits just below the chin without covering the jawline
 });
 
 const FEMININE_OUTFITS = new Set(['kebaya_putih', 'traditional_maroon', 'dress']);
@@ -141,45 +141,14 @@ export function computeV3HeadVertex(nx, ny, nz, isFeminine = false) {
 }
 
 /**
- * Computes clean minimalist skin tint (subtle healthy cheek warmth, zero dark orbital shadows).
- */
-export function computeV3FaceTint(nx, ny, nz) {
-  let r = 1.0;
-  let g = 1.0;
-  let b = 1.0;
-
-  if (nz > 0.18) {
-    const front = Math.min(1, (nz - 0.18) / 0.82);
-    // Subtle clean peachy blush on cheeks only
-    const cheek =
-      Math.exp(-Math.pow((Math.abs(nx) - 0.45) * 3.4, 2)) *
-      Math.exp(-Math.pow((ny + 0.14) * 3.8, 2));
-    r += cheek * front * 0.032;
-    g -= cheek * front * 0.016;
-    b -= cheek * front * 0.020;
-  }
-
-  // Ultra-subtle chin grounding (never muddy brown)
-  if (ny < -0.62) {
-    const jawAo = Math.min(1, (-ny - 0.62) / 0.38) * 0.025;
-    r -= jawAo;
-    g -= jawAo * 1.04;
-    b -= jawAo * 1.06;
-  }
-
-  return {
-    r: Math.max(0.92, Math.min(1.05, r)),
-    g: Math.max(0.90, Math.min(1.03, g)),
-    b: Math.max(0.88, Math.min(1.02, b))
-  };
-}
-
-/**
  * Evaluates a point on the open-face hijab frame boundary (angle u in [0, 2*PI]).
  * Carefully curves slightly backward around temples/cheeks so eyes, nose, lips & chin
  * are 100% clearly visible from Front, Three-Quarter, AND Side views.
  */
 export function sampleHijabAperturePoint(u, isFeminine = true) {
+  const headRx = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * (isFeminine ? 0.96 : 1.0);
+  const headRy = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y;
+  const headRz = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * (isFeminine ? 0.97 : 1.0);
   const rx = STYLIZED_V3_PROPORTIONS.HIJAB_APERTURE_RX * (isFeminine ? 0.98 : 1.0);
   const topY = STYLIZED_V3_PROPORTIONS.HIJAB_APERTURE_TOP_Y;
   const botY = STYLIZED_V3_PROPORTIONS.HIJAB_APERTURE_BOT_Y;
@@ -192,74 +161,26 @@ export function sampleHijabAperturePoint(u, isFeminine = true) {
   const x = sinU * rx;
   const y = centerY + cosU * ry;
 
-  // Hug facial contour while pulling temples/cheeks cleanly back so side profile stays clear
-  const nx = Math.max(-0.96, Math.min(0.96, x / STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X));
-  const ny = Math.max(-0.96, Math.min(0.96, y / STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y));
-  const nz = Math.sqrt(Math.max(0.04, 1 - nx * nx * 0.72 - ny * ny * 0.72));
+  // Project the opening onto the actual ellipsoid instead of using a loose spherical approximation.
+  const nx = Math.max(-0.98, Math.min(0.98, x / headRx));
+  const ny = Math.max(-0.98, Math.min(0.98, y / headRy));
+  const nz = Math.sqrt(Math.max(0.025, 1 - nx * nx - ny * ny));
   const surface = computeV3HeadVertex(nx, ny, nz, isFeminine);
 
-  const sideRecess = Math.abs(sinU) * 0.012;
-  const chinRecess = cosU < 0 ? (-cosU) * 0.008 : 0;
+  // Ellipsoid surface normal gives a small, consistent cloth clearance around the face.
+  let normalX = nx / headRx;
+  let normalY = ny / headRy;
+  let normalZ = nz / headRz;
+  const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
+  normalX /= normalLength;
+  normalY /= normalLength;
+  normalZ /= normalLength;
+  const clearance = 0.0055;
 
   return {
-    x: surface.x + sinU * 0.004,
-    y: surface.y + (cosU > 0 ? 0.005 : -0.004),
-    z: surface.z + 0.004 - sideRecess - chinRecess
-  };
-}
-
-/**
- * Evaluates a point on the V3 snug sculpted hijab frame (u in [0, 2*PI], t in [0, 1]).
- * Uses sleek ~8–15mm fabric clearance so hijab frames the head naturally without ballooning into a ball.
- */
-export function sampleHijabHoodPoint(u, t, isFeminine = true) {
-  const rim = sampleHijabAperturePoint(u, isFeminine);
-  const sinU = Math.sin(u);
-  const cosU = Math.cos(u);
-
-  if (t <= 0) {
-    return rim;
-  }
-
-  const rx = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * (isFeminine ? 0.96 : 1.0);
-  const ry = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y;
-  const rz = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * (isFeminine ? 0.97 : 1.0);
-  let rnx = rim.x / rx;
-  let rny = rim.y / ry;
-  let rnz = rim.z / rz;
-  const rLen = Math.hypot(rnx, rny, rnz) || 1;
-  rnx /= rLen;
-  rny /= rLen;
-  rnz /= rLen;
-
-  const bnx = 0;
-  const bny = 0.12;
-  const bnz = -0.99;
-
-  const ease = Math.sin(t * (Math.PI / 2));
-  let nx = rnx + (bnx - rnx) * ease;
-  let ny = rny + (bny - rny) * ease;
-  let nz = rnz + (bnz - rnz) * ease;
-  const len = Math.hypot(nx, ny, nz) || 1;
-  nx /= len;
-  ny /= len;
-  nz /= len;
-
-  const skullPt = computeV3HeadVertex(nx, ny, nz, isFeminine);
-  // Sleek snug scarf thickness (7mm at rim -> 15mm at crown/back occiput — no bloated white sphere)
-  const drapeClearance = 0.007 + Math.sin(t * Math.PI) * 0.006 + t * 0.007;
-  const sideBias = Math.abs(sinU) * Math.sin(t * Math.PI) * 0.002;
-  const topBias = cosU > 0 ? cosU * Math.sin(t * Math.PI) * 0.003 : 0;
-
-  const rawX = skullPt.x + nx * (drapeClearance + sideBias);
-  const rawY = skullPt.y + ny * (drapeClearance + topBias);
-  const rawZ = skullPt.z + nz * drapeClearance;
-  const blend = Math.min(1, t * 4.0);
-
-  return {
-    x: rim.x + (rawX - rim.x) * blend,
-    y: rim.y + (rawY - rim.y) * blend,
-    z: rim.z + (rawZ - rim.z) * blend
+    x: surface.x + normalX * clearance,
+    y: surface.y + normalY * clearance,
+    z: surface.z + normalZ * clearance
   };
 }
 
@@ -286,32 +207,38 @@ export function sampleScalpHairlinePoint(u, t, thickness = 0.011, isFeminine = f
     startNy = -0.38 - nT * 0.34; // reaches low nape cleanly (ny ~ -0.72)
   }
 
-  // Interpolate toward back crown / occiput (nx ~ 0, ny ~ 0.34, nz ~ -0.94)
-  const targetNx = 0;
-  const targetNy = 0.34;
-  const targetNz = -0.94;
-
-  // Start unit normal at hairline angle u
-  const startHoriz = Math.sqrt(Math.max(0.05, 1 - startNy * startNy));
-  const startNx = Math.sin(u) * startHoriz;
-  const startNz = Math.cos(u) * startHoriz;
-
-  let nx = startNx + (targetNx - startNx) * t;
-  let ny = startNy + (targetNy - startNy) * t;
-  let nz = startNz + (targetNz - startNz) * t;
-  const len = Math.hypot(nx, ny, nz) || 1;
-  nx /= len;
-  ny /= len;
-  nz /= len;
+  // Interpolate in polar angle, preserving the U/azimuth at every ring.
+  // The previous implementation blended every longitude toward one back-of-head point,
+  // collapsing the scalp into a twisted cap and producing helmet-like hair silhouettes.
+  const clampedT = Math.max(0, Math.min(1, t));
+  const easedT = clampedT * clampedT * (3 - 2 * clampedT);
+  const startTheta = Math.acos(Math.max(-0.98, Math.min(0.98, startNy)));
+  const crownTheta = 0.035;
+  const theta = startTheta + (crownTheta - startTheta) * easedT;
+  const sinTheta = Math.sin(theta);
+  const nx = Math.sin(u) * sinTheta;
+  const ny = Math.cos(theta);
+  const nz = Math.cos(u) * sinTheta;
 
   const base = computeV3HeadVertex(nx, ny, nz, isFeminine);
-  // Taper thickness smoothly near hairline edge (t ~ 0) so transition into forehead skin looks natural
-  const edgeTaper = Math.sin(Math.min(1, t * 2.5) * (Math.PI / 2));
-  const offset = thickness * (0.35 + 0.65 * edgeTaper);
+  const rx = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * (isFeminine ? 0.96 : 1.0);
+  const ry = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y;
+  const rz = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * (isFeminine ? 0.97 : 1.0);
+  let normalX = nx / rx;
+  let normalY = ny / ry;
+  let normalZ = nz / rz;
+  const normalLength = Math.hypot(normalX, normalY, normalZ) || 1;
+  normalX /= normalLength;
+  normalY /= normalLength;
+  normalZ /= normalLength;
+
+  // Keep a very small, even clearance; only the hairline edge is tucked slightly inward.
+  const edgeTaper = 0.35 + 0.65 * easedT;
+  const offset = thickness * edgeTaper;
 
   return {
-    x: base.x + nx * offset,
-    y: base.y + ny * offset,
-    z: base.z + nz * offset
+    x: base.x + normalX * offset,
+    y: base.y + normalY * offset,
+    z: base.z + normalZ * offset
   };
 }

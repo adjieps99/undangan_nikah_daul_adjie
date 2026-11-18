@@ -2,10 +2,8 @@ import * as THREE from 'three';
 import { mergeSafeGeometries, createParametricLoftGeometry } from './StylizedGeometry.js';
 import {
   STYLIZED_V3_PROPORTIONS,
-  computeV3FaceTint,
   computeV3HeadVertex,
   sampleHijabAperturePoint,
-  sampleHijabHoodPoint,
   sampleScalpHairlinePoint
 } from './StylizedMathV3.js';
 
@@ -360,25 +358,21 @@ export function buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, a
   const headGroup = new THREE.Group();
   headGroup.position.set(0, STYLIZED_V3_PROPORTIONS.HEAD_PIVOT_Y, 0);
 
-  const isFem = profile.isFeminine;
+  // A hijab preset must use the feminine head silhouette even if the current body preset is male.
+  // This is intentionally local to the head; the approved body profile remains untouched.
+  const isFem = Boolean(profile.isFeminine || hairStyle === 'hijab');
   const rx = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * (isFem ? 0.96 : 1.0);
 
-  // 1. Anatomically Sculpted Cranium + Facial Warmth Vertex Tints
+  // 1. Smooth, single-colour cranium. No vertex tint, skin texture, bump map, or pore overlay.
   const baseSphere = new THREE.SphereGeometry(1.0, 28, 22);
   const posAttr = baseSphere.attributes.position;
-  const colorArray = new Float32Array(posAttr.count * 3);
   for (let i = 0; i < posAttr.count; i++) {
     const nx = posAttr.getX(i);
     const ny = posAttr.getY(i);
     const nz = posAttr.getZ(i);
     const pt = computeV3HeadVertex(nx, ny, nz, isFem);
     posAttr.setXYZ(i, pt.x, pt.y, pt.z);
-    const tint = computeV3FaceTint(nx, ny, nz);
-    colorArray[i * 3] = tint.r;
-    colorArray[i * 3 + 1] = tint.g;
-    colorArray[i * 3 + 2] = tint.b;
   }
-  baseSphere.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
   baseSphere.computeVertexNormals();
 
   // 2. Clean Minimalist Stylized Nose (soft integrated nasal bridge + gentle tip, no loose spheres)
@@ -415,20 +409,15 @@ export function buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, a
   const eyeZ = socketSurface.z - 0.0045;
 
   // Soft natural upper eyelid curve (relaxed, warm, never startled wide-eyed)
-  const lidL = new THREE.SphereGeometry(0.0210, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.30);
+  const lidL = new THREE.SphereGeometry(0.0190, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.30);
   lidL.scale(1.04, 0.94, 0.84);
   lidL.rotateX(-0.18);
   lidL.translate(-eyeX, eyeY + 0.002, eyeZ);
 
-  const lidR = new THREE.SphereGeometry(0.0210, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.30);
+  const lidR = new THREE.SphereGeometry(0.0190, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.30);
   lidR.scale(1.04, 0.94, 0.84);
   lidR.rotateX(-0.18);
   lidR.translate(eyeX, eyeY + 0.002, eyeZ);
-
-  const faceSkinMat = skinMat.clone();
-  faceSkinMat.vertexColors = true;
-  faceSkinMat.roughness = 0.72;
-  faceSkinMat.metalness = 0.0;
 
   const mergedHeadSkin = mergeSafeGeometries([
     baseSphere,
@@ -438,12 +427,12 @@ export function buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, a
     lidL,
     lidR
   ]);
-  headGroup.add(new THREE.Mesh(mergedHeadSkin, faceSkinMat));
+  headGroup.add(new THREE.Mesh(mergedHeadSkin, skinMat));
 
   // 3. Clear, Expressive Stylized Eyes (crisp sclera, calm dark iris, bright catchlight)
   const eyeGeos = [];
   [-eyeX, eyeX].forEach((ex, idx) => {
-    const eye = new THREE.SphereGeometry(0.0198, 14, 12);
+    const eye = new THREE.SphereGeometry(0.0175, 14, 12);
     eye.rotateY(-Math.PI / 2 + (idx === 0 ? 0.02 : -0.02));
     eye.scale(1.04, 0.94, 0.80);
     eye.translate(ex, eyeY, eyeZ);
@@ -464,7 +453,7 @@ export function buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, a
       new THREE.Vector3(side * eyeX, eyeY + 0.010, eyeZ + 0.015),
       new THREE.Vector3(side * (eyeX + 0.017), eyeY + 0.002, eyeZ + 0.008)
     ]);
-    lashGeos.push(new THREE.TubeGeometry(lashCurve, 8, isFem ? 0.0020 : 0.0017, 5, false));
+    lashGeos.push(new THREE.TubeGeometry(lashCurve, 8, isFem ? 0.0016 : 0.0014, 5, false));
   });
   headGroup.add(new THREE.Mesh(mergeSafeGeometries(lashGeos), lashMat));
 
@@ -522,228 +511,201 @@ export function buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, a
  * Builds the open-face parametric scalp shell with OUTWARD normals (flipWinding: true)
  * covering temples, crown, sides, and entire back occiput while leaving forehead & face clear.
  */
-function createOpenFaceScalpShell(thickness, isFem, crownLift = 0.012) {
-  return createParametricSurfaceGrid(30, 12, (uNorm, t) => {
+function createOpenFaceScalpShell(thickness, isFem, crownLift = 0.005) {
+  return createParametricSurfaceGrid(40, 20, (uNorm, t) => {
     const u = (uNorm - 0.5) * Math.PI * 2;
-    const edgeBlend = t < 0.14 ? (-0.003 + (t / 0.14) * (thickness + 0.003)) : thickness;
-    const crownBoost = Math.sin(t * Math.PI) * crownLift * Math.max(0, 1 - Math.abs(u) / Math.PI);
-    return sampleScalpHairlinePoint(u, t, edgeBlend + crownBoost, isFem);
+    const point = sampleScalpHairlinePoint(u, t, thickness, isFem);
+    const crownBulge = Math.sin(Math.PI * t) * crownLift;
+    return {
+      x: point.x,
+      y: point.y + crownBulge,
+      z: point.z
+    };
   }, { flipWinding: true });
 }
 
+function createV3HairLock(points, radius = 0.011, tubularSegments = 18) {
+  const curve = new THREE.CatmullRomCurve3(
+    points.map(([x, y, z]) => new THREE.Vector3(x, y, z)),
+    false,
+    'centripetal'
+  );
+  return new THREE.TubeGeometry(curve, tubularSegments, radius, 7, false);
+}
+
+function createV3BackHairMass(wavy = false) {
+  const rings = wavy
+    ? [
+        { y: -0.275, rx: 0.132, rz: 0.058, offsetZ: -0.205, squareness: 0.84 },
+        { y: -0.180, rx: 0.146, rz: 0.064, offsetZ: -0.205, squareness: 0.86 },
+        { y: -0.065, rx: 0.141, rz: 0.062, offsetZ: -0.195, squareness: 0.88 },
+        { y: 0.075, rx: 0.126, rz: 0.058, offsetZ: -0.178, squareness: 0.90 }
+      ]
+    : [
+        { y: -0.280, rx: 0.132, rz: 0.058, offsetZ: -0.205, squareness: 0.86 },
+        { y: -0.175, rx: 0.145, rz: 0.064, offsetZ: -0.205, squareness: 0.88 },
+        { y: -0.045, rx: 0.139, rz: 0.062, offsetZ: -0.194, squareness: 0.90 },
+        { y: 0.075, rx: 0.122, rz: 0.056, offsetZ: -0.180, squareness: 0.92 }
+      ];
+  return createParametricLoftGeometry(rings, 18);
+}
+
 /**
- * Builds all 6 hair/headwear variations:
- * Clean, smooth, stylized volume strictly behind/above hairline — NEVER helmet-like and NEVER covering the face.
+ * Builds the six headwear choices from one clean scalp base.
+ * Hair volume is kept on the crown, behind the ears, and behind the head;
+ * no strand is allowed to cross the forehead, eyebrows, eyes, nose, or mouth.
  */
 function buildV3HairAndHeadwear(headGroup, style, hairMat, accentMat, isFem) {
   if (style === 'hijab') {
     const hijabMat = new THREE.MeshStandardMaterial({
       color: '#f3ede2',
-      roughness: 0.86,
+      roughness: 0.90,
       metalness: 0.0,
       side: THREE.DoubleSide
     });
-    const ciputMat = new THREE.MeshStandardMaterial({
-      color: '#dfd3c2',
+    const trimMat = new THREE.MeshStandardMaterial({
+      color: '#e7dccb',
       roughness: 0.88,
-      metalness: 0.0,
-      side: THREE.DoubleSide
+      metalness: 0.0
     });
 
-    // A. Thin Snug Inner Ciput Edge along top forehead hairline (keeps forehead, brows, eyes & cheeks 100% open)
-    const ciputGeo = createParametricSurfaceGrid(24, 4, (uNorm, vNorm) => {
-      const u = (uNorm - 0.5) * Math.PI * 0.96;
-      const pt = sampleHijabHoodPoint(u, vNorm * 0.16, isFem);
-      return {
-        x: pt.x * 0.988,
-        y: pt.y - (1 - vNorm) * 0.004,
-        z: pt.z - 0.003
-      };
-    }, { flipWinding: true });
-    headGroup.add(new THREE.Mesh(ciputGeo, ciputMat));
+    // A close-fitting fabric crown. It follows the skull rather than using a large sphere/hood.
+    const hoodGeo = createOpenFaceScalpShell(0.009, true, 0.004);
+    headGroup.add(new THREE.Mesh(hoodGeo, hijabMat));
 
-    // B. Sculpted Snug Hijab Head Frame (hugs head contour behind cheeks/jawline, never a bloated ball)
-    const hoodGeo = createParametricSurfaceGrid(34, 14, (uNorm, vNorm) => {
-      const u = uNorm * Math.PI * 2;
-      if (vNorm < 0.06) {
-        const rim = sampleHijabAperturePoint(u, isFem);
-        const tuck = 1 - vNorm / 0.06;
-        return {
-          x: rim.x * (1 - tuck * 0.012),
-          y: rim.y,
-          z: rim.z - tuck * 0.005
-        };
-      }
-      const t = (vNorm - 0.06) / 0.94;
-      return sampleHijabHoodPoint(u, t, isFem);
-    }, { flipWinding: true });
+    // A clear oval opening around the complete face: forehead, cheeks, jaw, and chin stay visible.
+    const framePoints = [];
+    for (let i = 0; i < 64; i++) {
+      const u = (i / 64) * Math.PI * 2;
+      const p = sampleHijabAperturePoint(u, true);
+      framePoints.push(new THREE.Vector3(p.x, p.y, p.z));
+    }
+    const frameCurve = new THREE.CatmullRomCurve3(framePoints, true, 'centripetal');
+    const frameGeo = new THREE.TubeGeometry(frameCurve, 64, 0.0034, 6, true);
+    headGroup.add(new THREE.Mesh(frameGeo, trimMat));
 
-    // C. Sleek Contoured Neck & Collarbone Shawl (hugs neck cleanly and drapes into chest without stiff back flare)
+    // Two separate pashmina panels. Their inner edges sit outside the cheeks;
+    // the fabric then falls outward and backward to the shoulders.
+    const drapePanels = [];
+    [-1, 1].forEach((side) => {
+      const panel = createParametricSurfaceGrid(14, 24, (u, v) => {
+        const x = side * (0.104 + 0.052 * u + 0.008 * Math.sin(v * Math.PI));
+        const y = 0.085 - 0.225 * v + 0.012 * Math.sin(u * Math.PI) * Math.sin(v * Math.PI);
+        const z = 0.074 - 0.165 * u - 0.018 * v + 0.008 * Math.sin(u * Math.PI);
+        return { x, y, z };
+      }, { flipWinding: side < 0 });
+      drapePanels.push(panel);
+    });
+
+    // Soft cloth around the neck; kept below the chin and independent from the face mesh.
     const neckDrapeGeo = createParametricLoftGeometry([
-      { y: -0.225, rx: 0.122, rz: 0.088, offsetZ: 0.012, squareness: 0.90 },
-      { y: -0.175, rx: 0.094, rz: 0.078, offsetZ: 0.006, squareness: 0.92 },
-      { y: -0.145, rx: 0.072, rz: 0.070, offsetZ: -0.001, squareness: 0.94 },
-      { y: -0.124, rx: 0.068, rz: 0.066, offsetZ: -0.005, squareness: 0.95 }
+      { y: -0.265, rx: 0.126, rz: 0.092, offsetZ: 0.008, squareness: 0.90 },
+      { y: -0.220, rx: 0.105, rz: 0.083, offsetZ: 0.006, squareness: 0.92 },
+      { y: -0.180, rx: 0.080, rz: 0.071, offsetZ: 0.000, squareness: 0.94 },
+      { y: -0.155, rx: 0.070, rz: 0.066, offsetZ: -0.004, squareness: 0.95 }
     ], 24, { capBottom: true, capTop: false });
 
-    headGroup.add(new THREE.Mesh(mergeSafeGeometries([hoodGeo, neckDrapeGeo]), hijabMat));
+    headGroup.add(new THREE.Mesh(
+      mergeSafeGeometries([...drapePanels, neckDrapeGeo]),
+      hijabMat
+    ));
 
-    const pin = new THREE.OctahedronGeometry(0.0085, 1);
-    pin.scale(1.0, 1.0, 0.5);
-    pin.translate(0.048, -0.168, 0.084);
+    const pin = new THREE.OctahedronGeometry(0.0065, 1);
+    pin.scale(1.0, 1.0, 0.55);
+    pin.translate(0.112, -0.145, 0.055);
     headGroup.add(new THREE.Mesh(pin, accentMat));
     return;
   }
 
-  const hairGeos = [];
-  const scalpThickness = style === 'short' ? 0.010 : style === 'cap' ? 0.006 : 0.010;
-  const crownLift = style === 'short' ? 0.014 : style === 'cap' ? 0.002 : 0.011;
-  hairGeos.push(createOpenFaceScalpShell(scalpThickness, isFem, crownLift));
+  const hairGeos = [
+    createOpenFaceScalpShell(style === 'cap' ? 0.006 : 0.008, isFem, style === 'cap' ? 0.002 : 0.004)
+  ];
 
   if (style === 'cap') {
-    const peciMat = new THREE.MeshStandardMaterial({ color: '#171413', roughness: 0.78, metalness: 0.02 });
+    const peciMat = new THREE.MeshStandardMaterial({ color: '#171413', roughness: 0.82, metalness: 0.01 });
     const peciGeo = createParametricLoftGeometry([
-      { y: 0.095, rx: 0.126, rz: 0.134, offsetZ: -0.014, squareness: 0.85 },
-      { y: 0.150, rx: 0.122, rz: 0.130, offsetZ: -0.016, squareness: 0.83 },
-      { y: 0.198, rx: 0.114, rz: 0.122, offsetZ: -0.018, squareness: 0.80 }
-    ], 22);
-    peciGeo.rotateX(-0.08);
+      { y: 0.103, rx: 0.125, rz: 0.132, offsetZ: -0.012, squareness: 0.86 },
+      { y: 0.153, rx: 0.122, rz: 0.130, offsetZ: -0.014, squareness: 0.84 },
+      { y: 0.198, rx: 0.113, rz: 0.121, offsetZ: -0.016, squareness: 0.82 }
+    ], 24);
     headGroup.add(new THREE.Mesh(peciGeo, peciMat));
 
-    const band = new THREE.TorusGeometry(0.125, 0.004, 8, 24);
+    const band = new THREE.TorusGeometry(0.124, 0.0032, 7, 28);
     band.rotateX(Math.PI / 2 - 0.08);
-    band.scale(1.0, 1.06, 1.0);
-    band.translate(0, 0.100, -0.014);
+    band.scale(1.0, 1.05, 1.0);
+    band.translate(0, 0.108, -0.012);
     headGroup.add(new THREE.Mesh(band, accentMat));
-
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
     return;
   }
 
   if (style === 'bun') {
-    const bun = new THREE.SphereGeometry(0.066, 16, 12);
-    bun.scale(1.10, 0.92, 0.86);
-    bun.translate(0, 0.048, -0.146);
+    hairGeos.push(createV3BackHairMass(false));
+
+    const bun = new THREE.SphereGeometry(0.052, 16, 12);
+    bun.scale(1.08, 0.90, 0.88);
+    bun.translate(0, 0.052, -0.205);
     hairGeos.push(bun);
 
-    const coil = new THREE.TorusGeometry(0.048, 0.012, 8, 18);
-    coil.translate(0, 0.048, -0.126);
-    hairGeos.push(coil);
-
-    // Swept-back hairline locks hugging temples above ears (zero facial coverage)
-    [-1, 1].forEach((side) => {
-      const sweep = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(side * 0.014, 0.144, 0.018),
-        new THREE.Vector3(side * 0.092, 0.102, 0.012),
-        new THREE.Vector3(side * 0.110, 0.035, -0.046),
-        new THREE.Vector3(side * 0.062, 0.042, -0.124)
-      ]);
-      const lock = scaleGeometryInPlace(new THREE.TubeGeometry(sweep, 12, 0.014, 7, false), 0.9, 1.0, 0.72);
-      hairGeos.push(lock);
-    });
+    const tie = new THREE.TorusGeometry(0.037, 0.005, 7, 18);
+    tie.translate(0, 0.052, -0.198);
+    hairGeos.push(tie);
 
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
-
-    const stem = new THREE.CylinderGeometry(0.0032, 0.0032, 0.19, 7);
-    stem.rotateZ(0.65);
-    stem.translate(0.036, 0.068, -0.142);
-    const tip = new THREE.OctahedronGeometry(0.013, 1);
-    tip.translate(0.094, 0.140, -0.142);
-    headGroup.add(new THREE.Mesh(mergeSafeGeometries([stem, tip]), accentMat));
     return;
   }
 
   if (style === 'long') {
-    // Smooth top crown loft + sleek behind-ear drapes so center crown has zero notch
-    const topCap = new THREE.SphereGeometry(0.118, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.42);
-    topCap.scale(1.02, 0.46, 1.05);
-    topCap.translate(0, 0.106, -0.014);
-    hairGeos.push(topCap);
-
+    hairGeos.push(createV3BackHairMass(false));
     [-1, 1].forEach((side) => {
-      const tressCurve = new THREE.CatmullRomCurve3([
-        new THREE.Vector3(side * 0.012, 0.148, 0.010),
-        new THREE.Vector3(side * 0.102, 0.100, -0.010),
-        new THREE.Vector3(side * 0.122, -0.020, -0.046),
-        new THREE.Vector3(side * 0.132, -0.145, -0.068),
-        new THREE.Vector3(side * 0.142, -0.255, -0.082)
-      ]);
-      const tGeo = scaleGeometryInPlace(new THREE.TubeGeometry(tressCurve, 14, 0.024, 8, false), 0.85, 1.0, 1.02);
-      hairGeos.push(tGeo);
+      hairGeos.push(createV3HairLock([
+        [side * 0.120, 0.090, -0.030],
+        [side * 0.132, 0.018, -0.060],
+        [side * 0.140, -0.090, -0.092],
+        [side * 0.142, -0.205, -0.125],
+        [side * 0.135, -0.275, -0.145]
+      ], 0.0125, 20));
     });
-
-    const backCascade = createParametricLoftGeometry([
-      { y: -0.265, rx: 0.148, rz: 0.056, offsetZ: -0.102, squareness: 0.86 },
-      { y: -0.125, rx: 0.138, rz: 0.062, offsetZ: -0.094, squareness: 0.88 },
-      { y: 0.035, rx: 0.126, rz: 0.070, offsetZ: -0.070, squareness: 0.90 }
-    ], 16);
-    hairGeos.push(backCascade);
-
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
     return;
   }
 
   if (style === 'wavy') {
-    const topCap = new THREE.SphereGeometry(0.118, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.42);
-    topCap.scale(1.02, 0.46, 1.05);
-    topCap.translate(0, 0.106, -0.014);
-    hairGeos.push(topCap);
-
-    // Soft sculpted layered wave clumps sweeping cleanly behind temples/ears (zero helmet sphere)
-    const clumpOffsets = [
-      { xScale: 0.92, zOff: -0.025, phase: 0.0 },
-      { xScale: 1.05, zOff: -0.058, phase: 0.6 },
-      { xScale: 0.82, zOff: -0.088, phase: 1.2 }
-    ];
+    hairGeos.push(createV3BackHairMass(true));
     [-1, 1].forEach((side) => {
-      clumpOffsets.forEach((c) => {
-        const waveCurve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(side * 0.018, 0.146, 0.008 + c.zOff * 0.25),
-          new THREE.Vector3(side * (0.104 * c.xScale), 0.095, -0.012 + c.zOff * 0.5),
-          new THREE.Vector3(side * (0.128 * c.xScale + Math.sin(c.phase) * 0.010), -0.025, c.zOff - 0.015),
-          new THREE.Vector3(side * (0.122 * c.xScale - Math.cos(c.phase) * 0.012), -0.140, c.zOff - 0.028),
-          new THREE.Vector3(side * (0.136 * c.xScale + Math.sin(c.phase) * 0.014), -0.245, c.zOff - 0.034)
-        ]);
-        const wGeo = scaleGeometryInPlace(new THREE.TubeGeometry(waveCurve, 12, 0.020, 7, false), 0.90, 1.0, 0.90);
-        hairGeos.push(wGeo);
-      });
+      hairGeos.push(createV3HairLock([
+        [side * 0.122, 0.085, -0.035],
+        [side * 0.139, 0.015, -0.070],
+        [side * 0.132, -0.070, -0.100],
+        [side * 0.145, -0.155, -0.128],
+        [side * 0.137, -0.265, -0.150]
+      ], 0.0105, 20));
+      hairGeos.push(createV3HairLock([
+        [side * 0.132, 0.055, -0.080],
+        [side * 0.145, -0.020, -0.105],
+        [side * 0.136, -0.115, -0.132],
+        [side * 0.148, -0.215, -0.158]
+      ], 0.0085, 18));
     });
-
-    const backWave = createParametricLoftGeometry([
-      { y: -0.250, rx: 0.142, rz: 0.056, offsetZ: -0.104, squareness: 0.85 },
-      { y: -0.115, rx: 0.134, rz: 0.062, offsetZ: -0.094, squareness: 0.87 },
-      { y: 0.040, rx: 0.124, rz: 0.068, offsetZ: -0.070, squareness: 0.90 }
-    ], 16);
-    hairGeos.push(backWave);
-
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
     return;
   }
 
-  // Default: 'short' — Clean stylized textured top volume (rounded dome + gentle side sweep, zero horn ridges)
+  // Default short hairstyle: clean scalp, one restrained front sweep above the eyebrows,
+  // and short sideburns tucked outside the cheeks. No crown sphere or bulky front cap.
+  hairGeos.push(createV3HairLock([
+    [-0.074, 0.116, 0.086],
+    [-0.035, 0.137, 0.105],
+    [0.018, 0.132, 0.106],
+    [0.064, 0.111, 0.088]
+  ], 0.0095, 16));
   [-1, 1].forEach((side) => {
-    const sideBurn = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(side * 0.114, 0.086, 0.012),
-      new THREE.Vector3(side * 0.118, 0.044, 0.008),
-      new THREE.Vector3(side * 0.115, 0.008, 0.004)
-    ]);
-    const sGeo = scaleGeometryInPlace(new THREE.TubeGeometry(sideBurn, 6, 0.008, 5, false), 0.45, 1.0, 1.05);
-    hairGeos.push(sGeo);
+    hairGeos.push(createV3HairLock([
+      [side * 0.118, 0.070, 0.010],
+      [side * 0.122, 0.026, 0.000],
+      [side * 0.119, -0.018, -0.012]
+    ], 0.0065, 10));
   });
-
-  const crownCap = new THREE.SphereGeometry(0.116, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.46);
-  crownCap.scale(1.04, 0.50, 1.10);
-  crownCap.translate(0.004, 0.104, -0.004);
-  hairGeos.push(crownCap);
-
-  const sweepCurve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-0.072, 0.118, 0.036),
-    new THREE.Vector3(-0.008, 0.144, 0.052),
-    new THREE.Vector3(0.064, 0.134, 0.038),
-    new THREE.Vector3(0.104, 0.098, 0.006)
-  ]);
-  hairGeos.push(scaleGeometryInPlace(new THREE.TubeGeometry(sweepCurve, 12, 0.021, 7, false), 1.10, 0.62, 1.0));
-
   headGroup.add(new THREE.Mesh(mergeSafeGeometries(hairGeos), hairMat));
 }
 
@@ -751,29 +713,29 @@ function buildV3Accessory(headGroup, accessory, hairStyle, accentMat, isFem, eye
   if (!accessory || accessory === 'none') return;
 
   if (accessory === 'glasses') {
-    const frameMat = new THREE.MeshStandardMaterial({ color: '#1b1820', metalness: 0.75, roughness: 0.25 });
-    const lensMat = new THREE.MeshStandardMaterial({ color: '#dff0ff', transparent: true, opacity: 0.32, roughness: 0.08 });
+    const frameMat = new THREE.MeshStandardMaterial({ color: '#27232a', metalness: 0.22, roughness: 0.48 });
+    const lensMat = new THREE.MeshStandardMaterial({ color: '#e8f0f4', transparent: true, opacity: 0.16, roughness: 0.24 });
 
     const frameGeos = [];
     const lensGeos = [];
     const lensZ = eyeZ + 0.024;
     [-eyeX - 0.001, eyeX + 0.001].forEach((gx) => {
-      const rim = new THREE.TorusGeometry(0.0235, 0.0026, 8, 18);
+      const rim = new THREE.TorusGeometry(0.0195, 0.00155, 7, 20);
       rim.translate(gx, eyeY, lensZ);
       frameGeos.push(rim);
 
-      const lens = new THREE.CircleGeometry(0.022, 14);
+      const lens = new THREE.CircleGeometry(0.0182, 16);
       lens.translate(gx, eyeY, lensZ - 0.001);
       lensGeos.push(lens);
 
       const sideSign = Math.sign(gx);
-      const temple = new THREE.BoxGeometry(0.0028, 0.0028, 0.120);
-      temple.translate(sideSign * (eyeX + 0.0245), eyeY + 0.002, lensZ - 0.060);
+      const temple = new THREE.BoxGeometry(0.0018, 0.0020, 0.105);
+      temple.translate(sideSign * (eyeX + 0.0205), eyeY + 0.001, lensZ - 0.052);
       frameGeos.push(temple);
     });
 
-    const bridge = new THREE.BoxGeometry(0.028, 0.0035, 0.004);
-    bridge.translate(0, eyeY + 0.003, lensZ + 0.001);
+    const bridge = new THREE.BoxGeometry(0.022, 0.0022, 0.003);
+    bridge.translate(0, eyeY + 0.002, lensZ + 0.001);
     frameGeos.push(bridge);
 
     headGroup.add(new THREE.Mesh(mergeSafeGeometries(frameGeos), frameMat));

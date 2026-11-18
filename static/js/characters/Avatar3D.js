@@ -85,7 +85,9 @@ export class Avatar3D {
         if (q === 'v3' || q === 'v2' || q === 'v1') return q;
       } catch (_e) {}
     }
-    return 'v1';
+    // V3 is the approved head/body baseline for the live wedding world.
+    // V1/V2 remain available through an explicit query flag for prototype comparison.
+    return 'v3';
   }
 
   async _hydrateOptionalGlb() {
@@ -630,7 +632,8 @@ export class Avatar3D {
     const hairMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(hairCol),
       roughness: 0.78,
-      metalness: 0.0
+      metalness: 0.0,
+      side: THREE.DoubleSide
     });
 
     // Grounding Contact Shadow

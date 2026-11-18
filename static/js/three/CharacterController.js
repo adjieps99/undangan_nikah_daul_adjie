@@ -34,7 +34,7 @@ export class CharacterController {
 
     // Load Avatar3D (procedural + optional rigged GLB)
     const config = gameState.getState().playerConfig;
-    this.avatar = new Avatar3D(config, { role: 'guest' });
+    this.avatar = new Avatar3D(config, { role: 'guest', proceduralVersion: 'v3' });
     this.mesh = this.avatar.group;
     // Initial spawn based on lastOutdoorPosition, URL parameter, or default Pintu Masuk
     const savedOutdoor = gameState.getState().lastOutdoorPosition;
@@ -57,7 +57,7 @@ export class CharacterController {
         if (this.avatar && typeof this.avatar.dispose === 'function') {
           this.avatar.dispose();
         }
-        this.avatar = new Avatar3D(state.playerConfig, { role: 'guest' });
+        this.avatar = new Avatar3D(state.playerConfig, { role: 'guest', proceduralVersion: 'v3' });
         this.mesh = this.avatar.group;
         this.mesh.position.copy(currentPos);
         this.mesh.rotation.y = currentRot;

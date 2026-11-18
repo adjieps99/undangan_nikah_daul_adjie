@@ -1,12 +1,32 @@
 import * as THREE from 'three';
 import { characterTextures } from './CharacterTextures.js';
 import { CHARACTER_ANIM_STATES, loadOptionalRiggedCharacter } from './CharacterAnimator.js';
+import {
+  STYLIZED_V2_PROPORTIONS,
+  dampValue,
+  resolveWalkingAnimPhase
+} from './StylizedMath.js';
+import {
+  buildStylizedArmGroup,
+  buildStylizedHeadGroup,
+  buildStylizedLegGroup,
+  buildStylizedTorsoGroup
+} from './StylizedGeometry.js';
+import {
+  STYLIZED_V3_PROPORTIONS,
+  resolveV3SilhouetteProfile
+} from './StylizedMathV3.js';
+import {
+  buildV3ArmGroup,
+  buildV3HeadGroup,
+  buildV3LegGroup,
+  buildV3TorsoGroup
+} from './StylizedGeometryV3.js';
 
 /**
- * Avatar3D - Semi-Realistic Digital Human Character Generator + Optional Rigged GLB Adapter
- * Provides anatomically proportioned 3D digital humans with PBR skin, sculpted
- * brow arches, contoured organic palms/knuckles, hair textures, tailored attire,
- * and a unified animation state interface compatible with optional rigged .glb models.
+ * Avatar3D - Stylized & Legacy Digital Human Character Generator + Optional Rigged GLB Adapter
+ * Supports V1 legacy procedural fallback and V2 Sims-inspired stylized smooth human geometry,
+ * smooth delta-time articulated animation, and full GPU resource disposal.
  */
 export class Avatar3D {
   constructor(config = {}, options = {}) {
@@ -15,6 +35,7 @@ export class Avatar3D {
     this.group.add(this.rigRoot);
     this.config = config;
     this.role = options.role || 'guest';
+    this.proceduralVersion = Avatar3D.resolveProceduralVersion(options);
 
     // Body parts references required by CharacterController for smooth walking/sitting
     this.leftLeg = null;
@@ -23,6 +44,8 @@ export class Avatar3D {
     this.rightKnee = null;
     this.leftArm = null;
     this.rightArm = null;
+    this.leftForearm = null;
+    this.rightForearm = null;
     this.torso = null;
     this.head = null;
     this.shadow = null;
@@ -30,19 +53,45 @@ export class Avatar3D {
 
     this.animState = CHARACTER_ANIM_STATES.IDLE;
     this.isSittingPose = false;
+    this._lastSeatingPose = null;
     this._animElapsed = 0;
     this._riggedModel = null;
     this._isDisposed = false;
+    this._useRealisticStyleCScale = Boolean(options.useRealisticStyleCScale);
+    this._v3Profile = null;
+    if (this.proceduralVersion === 'v3') {
+      this.baseHeadY = STYLIZED_V3_PROPORTIONS.HEAD_PIVOT_Y;
+      this.buildStylizedCharacterV3();
+    } else if (this.proceduralVersion === 'v2') {
+      this.baseHeadY = STYLIZED_V2_PROPORTIONS.HEAD_PIVOT_Y;
+      this.buildStylizedCharacterV2();
+    } else {
+      this.baseHeadY = 2.14;
+      this.buildRealisticCharacter();
+    }
 
-    this.buildRealisticCharacter();
-
-    if (options.enableOptionalGlb !== false && typeof window !== 'undefined') {
+    if (this.proceduralVersion === 'v1' && options.enableOptionalGlb !== false && typeof window !== 'undefined') {
       this._hydrateOptionalGlb();
     }
   }
 
+  static resolveProceduralVersion(options = {}) {
+    if (options && (options.proceduralVersion === 'v1' || options.proceduralVersion === 'v2' || options.proceduralVersion === 'v3')) {
+      return options.proceduralVersion;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const q = new URLSearchParams(window.location.search).get('avatar');
+        if (q === 'v3' || q === 'v2' || q === 'v1') return q;
+      } catch (_e) {}
+    }
+    return 'v1';
+  }
+
   async _hydrateOptionalGlb() {
-    const loaded = await loadOptionalRiggedCharacter(this.role);
+    const loaded = await loadOptionalRiggedCharacter(this.role, {
+      useRealisticStyleCScale: this._useRealisticStyleCScale
+    });
     if (!loaded || this._isDisposed) {
       if (loaded) loaded.dispose();
       return;
@@ -53,7 +102,24 @@ export class Avatar3D {
       if (part) part.visible = false;
     });
     this.rigRoot.add(loaded.sceneRoot);
-    loaded.playState(this.isSittingPose ? CHARACTER_ANIM_STATES.SITTING : this.animState);
+
+    if (this.isSittingPose) {
+      this.setSitting(true, this._lastSeatingPose);
+    } else {
+      this.rigRoot.position.y = 0;
+      loaded.playState(this.animState);
+    }
+  }
+
+  getDiagnostics() {
+    return {
+      mode: this._riggedModel ? 'glb' : 'procedural',
+      proceduralVersion: this.proceduralVersion,
+      role: this.role,
+      animState: this.animState,
+      isSitting: this.isSittingPose,
+      rig: this._riggedModel ? this._riggedModel.getDiagnostics() : null
+    };
   }
 
   setAnimationState(stateName) {
@@ -66,124 +132,221 @@ export class Avatar3D {
   }
 
   updateAnimation(stateName, delta = 0.016, animTime = 0, options = {}) {
-    this._animElapsed += delta;
+    if (this._isDisposed) return;
+    const dt = Math.max(0.001, Math.min(0.05, delta || 0.016));
+    this._animElapsed += dt;
     this.setAnimationState(stateName);
 
     if (this._riggedModel) {
-      this._riggedModel.update(delta);
+      this._riggedModel.update(dt);
       return;
     }
 
-    const baseHeadY = 2.14;
+    const baseHeadY = this.baseHeadY;
+    const blend = 11.0;
 
     if (stateName === CHARACTER_ANIM_STATES.SITTING || this.isSittingPose) {
-      const breath = Math.sin(this._animElapsed * 2.1) * 0.014;
+      const breath = Math.sin(this._animElapsed * 2.1) * 0.010;
+      if (this.torso) {
+        this.torso.rotation.x = dampValue(this.torso.rotation.x, -0.04, 8, dt);
+        this.torso.rotation.y = dampValue(this.torso.rotation.y, 0, 8, dt);
+      }
+      if (this.leftArm) {
+        this.leftArm.rotation.x = dampValue(this.leftArm.rotation.x, -0.38, 9, dt);
+        this.leftArm.rotation.z = dampValue(this.leftArm.rotation.z, -0.06, 9, dt);
+      }
+      if (this.rightArm) {
+        this.rightArm.rotation.x = dampValue(this.rightArm.rotation.x, -0.38, 9, dt);
+        this.rightArm.rotation.z = dampValue(this.rightArm.rotation.z, 0.06, 9, dt);
+      }
+      if (this.leftForearm) {
+        this.leftForearm.rotation.x = dampValue(this.leftForearm.rotation.x, -0.52, 9, dt);
+        this.leftForearm.rotation.z = dampValue(this.leftForearm.rotation.z, -0.10, 9, dt);
+      }
+      if (this.rightForearm) {
+        this.rightForearm.rotation.x = dampValue(this.rightForearm.rotation.x, -0.52, 9, dt);
+        this.rightForearm.rotation.z = dampValue(this.rightForearm.rotation.z, 0.10, 9, dt);
+      }
       if (this.head) {
-        this.head.position.y = baseHeadY + breath;
-        this.head.rotation.y = Math.sin(this._animElapsed * 0.7) * 0.05;
+        this.head.position.y = dampValue(this.head.position.y, baseHeadY + breath, 10, dt);
+        this.head.rotation.x = dampValue(this.head.rotation.x, Math.sin(this._animElapsed * 1.1) * 0.025, 6, dt);
+        this.head.rotation.y = dampValue(this.head.rotation.y, Math.sin(this._animElapsed * 0.7) * 0.06, 6, dt);
+        this.head.rotation.z = dampValue(this.head.rotation.z, 0, 8, dt);
       }
       return;
     }
 
     if (stateName === CHARACTER_ANIM_STATES.GREETING) {
-      const wave = Math.sin(this._animElapsed * 4.2);
-      const nod = Math.sin(this._animElapsed * 2.1) * 0.05;
-      if (this.rightArm) {
-        this.rightArm.rotation.x = -1.25 + wave * 0.14;
-        this.rightArm.rotation.z = -0.32 + wave * 0.12;
+      const wave = Math.sin(this._animElapsed * 5.0);
+      const nod = Math.sin(this._animElapsed * 2.2) * 0.045;
+      if (!this.isSittingPose) {
+        this.rigRoot.position.y = dampValue(this.rigRoot.position.y, 0, 10, dt);
       }
-      if (this.leftArm) this.leftArm.rotation.x = -0.18;
+      if (this.leftLeg) this.leftLeg.rotation.x = dampValue(this.leftLeg.rotation.x, 0, blend, dt);
+      if (this.rightLeg) this.rightLeg.rotation.x = dampValue(this.rightLeg.rotation.x, 0, blend, dt);
+      if (this.leftKnee) this.leftKnee.rotation.x = dampValue(this.leftKnee.rotation.x, 0, blend, dt);
+      if (this.rightKnee) this.rightKnee.rotation.x = dampValue(this.rightKnee.rotation.x, 0, blend, dt);
+      if (this.torso) {
+        this.torso.rotation.x = dampValue(this.torso.rotation.x, 0.02, 8, dt);
+        this.torso.rotation.y = dampValue(this.torso.rotation.y, Math.sin(this._animElapsed * 1.8) * 0.04, 8, dt);
+      }
+      if (this.rightArm) {
+        this.rightArm.rotation.x = dampValue(this.rightArm.rotation.x, this.rightForearm ? -0.95 : -1.25 + wave * 0.14, 10, dt);
+        this.rightArm.rotation.z = dampValue(this.rightArm.rotation.z, this.rightForearm ? 0.32 : 0.24 + wave * 0.12, 10, dt);
+      }
+      if (this.rightForearm) {
+        this.rightForearm.rotation.x = dampValue(this.rightForearm.rotation.x, -1.18, 12, dt);
+        this.rightForearm.rotation.z = dampValue(this.rightForearm.rotation.z, 0.12 + wave * 0.25, 14, dt);
+      }
+      if (this.leftArm) {
+        this.leftArm.rotation.x = dampValue(this.leftArm.rotation.x, -0.08, 10, dt);
+        this.leftArm.rotation.z = dampValue(this.leftArm.rotation.z, this._v3Profile ? -this._v3Profile.armRestAbductionZ : -0.06, 10, dt);
+      }
+      if (this.leftForearm) {
+        this.leftForearm.rotation.x = dampValue(this.leftForearm.rotation.x, -0.18, 10, dt);
+        this.leftForearm.rotation.z = dampValue(this.leftForearm.rotation.z, 0, 10, dt);
+      }
       if (this.head) {
-        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.015;
-        this.head.rotation.x = nod;
+        this.head.position.y = dampValue(this.head.position.y, baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.012, 10, dt);
+        this.head.rotation.x = dampValue(this.head.rotation.x, nod, 8, dt);
+        this.head.rotation.y = dampValue(this.head.rotation.y, Math.sin(this._animElapsed * 1.2) * 0.06, 8, dt);
+        this.head.rotation.z = dampValue(this.head.rotation.z, -0.04, 8, dt);
       }
       return;
     }
 
     if (stateName === CHARACTER_ANIM_STATES.WALKING) {
-      const tAnim = options.isWalkingView ? 1.05 : animTime * 1.5;
-      const legAngle = Math.sin(tAnim) * 0.45;
-      const armAngle = Math.sin(tAnim) * 0.38;
-      const kneeFlex = Math.max(0, Math.sin(tAnim + 0.6)) * 0.28;
+      const tAnim = resolveWalkingAnimPhase(animTime, options);
+      const legAngle = Math.sin(tAnim) * 0.44;
+      const armAngle = Math.sin(tAnim) * 0.36;
+      const leftKneeTarget = Math.max(0, -legAngle * 0.52 + Math.cos(tAnim) * 0.16);
+      const rightKneeTarget = Math.max(0, legAngle * 0.52 - Math.cos(tAnim) * 0.16);
+      const strideBounce = Math.abs(Math.sin(tAnim)) * 0.020;
 
-      if (this.leftLeg) this.leftLeg.rotation.x = legAngle;
-      if (this.rightLeg) this.rightLeg.rotation.x = -legAngle;
-      if (this.leftKnee && !this.isSittingPose) this.leftKnee.rotation.x = legAngle < 0 ? Math.abs(legAngle) * 0.35 : 0;
-      if (this.rightKnee && !this.isSittingPose) this.rightKnee.rotation.x = legAngle > 0 ? Math.abs(legAngle) * 0.35 : 0;
+      if (!this.isSittingPose) {
+        this.rigRoot.position.y = dampValue(this.rigRoot.position.y, strideBounce, 14, dt);
+      }
+      if (this.leftLeg) this.leftLeg.rotation.x = dampValue(this.leftLeg.rotation.x, legAngle, 14, dt);
+      if (this.rightLeg) this.rightLeg.rotation.x = dampValue(this.rightLeg.rotation.x, -legAngle, 14, dt);
+      if (this.leftKnee && !this.isSittingPose) {
+        this.leftKnee.rotation.x = dampValue(this.leftKnee.rotation.x, leftKneeTarget, 14, dt);
+      }
+      if (this.rightKnee && !this.isSittingPose) {
+        this.rightKnee.rotation.x = dampValue(this.rightKnee.rotation.x, rightKneeTarget, 14, dt);
+      }
+      if (this.torso) {
+        this.torso.rotation.x = dampValue(this.torso.rotation.x, 0.03, 10, dt);
+        this.torso.rotation.y = dampValue(this.torso.rotation.y, Math.sin(tAnim) * 0.06, 12, dt);
+      }
       if (this.leftArm) {
-        this.leftArm.rotation.x = -armAngle;
-        this.leftArm.rotation.z = 0.04 + kneeFlex * 0.04;
+        this.leftArm.rotation.x = dampValue(this.leftArm.rotation.x, -armAngle, 14, dt);
+        this.leftArm.rotation.z = dampValue(this.leftArm.rotation.z, this._v3Profile ? -0.095 : -0.05, 10, dt);
       }
       if (this.rightArm) {
-        this.rightArm.rotation.x = armAngle;
-        this.rightArm.rotation.z = -0.04 - kneeFlex * 0.04;
+        this.rightArm.rotation.x = dampValue(this.rightArm.rotation.x, armAngle, 14, dt);
+        this.rightArm.rotation.z = dampValue(this.rightArm.rotation.z, this._v3Profile ? 0.095 : 0.05, 10, dt);
+      }
+      if (this.leftForearm) {
+        this.leftForearm.rotation.x = dampValue(this.leftForearm.rotation.x, -0.18 - Math.max(0, armAngle) * 0.34, 14, dt);
+        this.leftForearm.rotation.z = dampValue(this.leftForearm.rotation.z, 0, 10, dt);
+      }
+      if (this.rightForearm) {
+        this.rightForearm.rotation.x = dampValue(this.rightForearm.rotation.x, -0.18 - Math.max(0, -armAngle) * 0.34, 14, dt);
+        this.rightForearm.rotation.z = dampValue(this.rightForearm.rotation.z, 0, 10, dt);
       }
       if (this.head) {
-        this.head.position.y = baseHeadY + Math.abs(Math.sin(tAnim)) * 0.028;
-        this.head.rotation.y *= 0.85;
+        this.head.position.y = dampValue(this.head.position.y, baseHeadY + strideBounce * 0.6, 14, dt);
+        this.head.rotation.x = dampValue(this.head.rotation.x, 0.015, 10, dt);
+        this.head.rotation.y = dampValue(this.head.rotation.y, -Math.sin(tAnim) * 0.03, 10, dt);
+        this.head.rotation.z = dampValue(this.head.rotation.z, 0, 10, dt);
       }
       return;
     }
 
     if (stateName === CHARACTER_ANIM_STATES.TURNING) {
       const sway = Math.sin(this._animElapsed * 5.0) * 0.08;
-      if (this.leftLeg) this.leftLeg.rotation.x *= 0.7;
-      if (this.rightLeg) this.rightLeg.rotation.x *= 0.7;
-      if (this.leftKnee) this.leftKnee.rotation.x *= 0.7;
-      if (this.rightKnee) this.rightKnee.rotation.x *= 0.7;
-      if (this.leftArm) this.leftArm.rotation.x = sway;
-      if (this.rightArm) this.rightArm.rotation.x = -sway;
-      if (this.head) {
-        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.015;
-        this.head.rotation.y = Math.max(-0.18, Math.min(0.18, options.turnDir || 0.08));
+      if (!this.isSittingPose) {
+        this.rigRoot.position.y = dampValue(this.rigRoot.position.y, 0, 12, dt);
       }
-      return;
-    }
-
-    if (stateName === CHARACTER_ANIM_STATES.STANDING) {
-      if (this.leftLeg) this.leftLeg.rotation.x *= 0.6;
-      if (this.rightLeg) this.rightLeg.rotation.x *= 0.6;
-      if (this.leftKnee) this.leftKnee.rotation.x *= 0.6;
-      if (this.rightKnee) this.rightKnee.rotation.x *= 0.6;
+      if (this.leftLeg) this.leftLeg.rotation.x = dampValue(this.leftLeg.rotation.x, 0, blend, dt);
+      if (this.rightLeg) this.rightLeg.rotation.x = dampValue(this.rightLeg.rotation.x, 0, blend, dt);
+      if (this.leftKnee) this.leftKnee.rotation.x = dampValue(this.leftKnee.rotation.x, 0, blend, dt);
+      if (this.rightKnee) this.rightKnee.rotation.x = dampValue(this.rightKnee.rotation.x, 0, blend, dt);
+      if (this.torso) {
+        this.torso.rotation.x = dampValue(this.torso.rotation.x, 0, 10, dt);
+        this.torso.rotation.y = dampValue(this.torso.rotation.y, (options.turnDir || 0) * 0.35, 10, dt);
+      }
       if (this.leftArm) {
-        this.leftArm.rotation.x *= 0.65;
-        this.leftArm.rotation.z *= 0.65;
+        this.leftArm.rotation.x = dampValue(this.leftArm.rotation.x, sway, 10, dt);
+        this.leftArm.rotation.z = dampValue(this.leftArm.rotation.z, this._v3Profile ? -this._v3Profile.armRestAbductionZ : -0.05, 10, dt);
       }
       if (this.rightArm) {
-        this.rightArm.rotation.x *= 0.65;
-        this.rightArm.rotation.z *= 0.65;
+        this.rightArm.rotation.x = dampValue(this.rightArm.rotation.x, -sway, 10, dt);
+        this.rightArm.rotation.z = dampValue(this.rightArm.rotation.z, this._v3Profile ? this._v3Profile.armRestAbductionZ : 0.05, 10, dt);
       }
+      if (this.leftForearm) this.leftForearm.rotation.x = dampValue(this.leftForearm.rotation.x, -0.14, 10, dt);
+      if (this.rightForearm) this.rightForearm.rotation.x = dampValue(this.rightForearm.rotation.x, -0.14, 10, dt);
       if (this.head) {
-        this.head.position.y = baseHeadY + Math.sin(this._animElapsed * 2.0) * 0.015;
-        this.head.rotation.y *= 0.75;
+        this.head.position.y = dampValue(this.head.position.y, baseHeadY + Math.sin(this._animElapsed * 2.2) * 0.010, 10, dt);
+        this.head.rotation.y = dampValue(this.head.rotation.y, Math.max(-0.18, Math.min(0.18, options.turnDir || 0.08)), 10, dt);
+        this.head.rotation.z = dampValue(this.head.rotation.z, 0, 10, dt);
       }
       return;
     }
 
-    // Default IDLE breathing & natural stance
-    const breath = Math.sin(animTime * 0.4) * 0.025;
-    if (this.leftLeg) this.leftLeg.rotation.x = 0;
-    if (this.rightLeg) this.rightLeg.rotation.x = 0;
-    if (this.leftKnee) this.leftKnee.rotation.x = 0;
-    if (this.rightKnee) this.rightKnee.rotation.x = 0;
+    // STANDING / Default IDLE smooth breathing & relaxed natural stance
+    const breath = Math.sin(this._animElapsed * 1.9) * 0.014;
+    const restAbduction = this._v3Profile ? this._v3Profile.armRestAbductionZ : 0.045;
+    const restElbow = this._v3Profile ? this._v3Profile.elbowRestBendX : -0.12;
+    if (!this.isSittingPose) {
+      this.rigRoot.position.y = dampValue(this.rigRoot.position.y, 0, 12, dt);
+    }
+    if (this.leftLeg) this.leftLeg.rotation.x = dampValue(this.leftLeg.rotation.x, 0, blend, dt);
+    if (this.rightLeg) this.rightLeg.rotation.x = dampValue(this.rightLeg.rotation.x, 0, blend, dt);
+    if (this.leftKnee) this.leftKnee.rotation.x = dampValue(this.leftKnee.rotation.x, 0, blend, dt);
+    if (this.rightKnee) this.rightKnee.rotation.x = dampValue(this.rightKnee.rotation.x, 0, blend, dt);
+    if (this.torso) {
+      this.torso.rotation.x = dampValue(this.torso.rotation.x, breath * 0.45, 8, dt);
+      this.torso.rotation.y = dampValue(this.torso.rotation.y, 0, 8, dt);
+    }
     if (this.leftArm) {
-      this.leftArm.rotation.x = breath * 0.4;
-      this.leftArm.rotation.z = 0.03;
+      this.leftArm.rotation.x = dampValue(this.leftArm.rotation.x, breath * 0.5, 9, dt);
+      this.leftArm.rotation.z = dampValue(this.leftArm.rotation.z, -restAbduction, 9, dt);
     }
     if (this.rightArm) {
-      this.rightArm.rotation.x = -breath * 0.4;
-      this.rightArm.rotation.z = -0.03;
+      this.rightArm.rotation.x = dampValue(this.rightArm.rotation.x, -breath * 0.5, 9, dt);
+      this.rightArm.rotation.z = dampValue(this.rightArm.rotation.z, restAbduction, 9, dt);
+    }
+    if (this.leftForearm) {
+      this.leftForearm.rotation.x = dampValue(this.leftForearm.rotation.x, restElbow, 9, dt);
+      this.leftForearm.rotation.z = dampValue(this.leftForearm.rotation.z, 0, 9, dt);
+    }
+    if (this.rightForearm) {
+      this.rightForearm.rotation.x = dampValue(this.rightForearm.rotation.x, restElbow, 9, dt);
+      this.rightForearm.rotation.z = dampValue(this.rightForearm.rotation.z, 0, 9, dt);
     }
     if (this.head) {
-      this.head.position.y = baseHeadY + breath;
-      this.head.rotation.y *= 0.9;
-      this.head.rotation.x *= 0.9;
+      this.head.position.y = dampValue(this.head.position.y, baseHeadY + breath * 0.75, 9, dt);
+      this.head.rotation.x = dampValue(this.head.rotation.x, Math.sin(this._animElapsed * 0.9) * 0.015, 7, dt);
+      this.head.rotation.y = dampValue(this.head.rotation.y, Math.sin(this._animElapsed * 0.55) * 0.035, 7, dt);
+      this.head.rotation.z = dampValue(this.head.rotation.z, 0, 8, dt);
     }
   }
 
   setSitting(isSitting, pose = null) {
     this.isSittingPose = Boolean(isSitting);
+    this._lastSeatingPose = isSitting ? pose : null;
     this.setAnimationState(isSitting ? CHARACTER_ANIM_STATES.SITTING : CHARACTER_ANIM_STATES.IDLE);
+
+    if (this._riggedModel) {
+      if (isSitting) {
+        const glbRootOffsetY = pose && typeof pose.glbRootOffsetY === 'number' ? pose.glbRootOffsetY : 0;
+        this.rigRoot.position.y = glbRootOffsetY;
+      } else {
+        this.rigRoot.position.y = 0;
+      }
+      return;
+    }
 
     if (isSitting) {
       const hipOffsetY = pose && typeof pose.hipOffsetY === 'number' ? pose.hipOffsetY : -0.44;
@@ -195,8 +358,10 @@ export class Avatar3D {
       if (this.rightLeg) this.rightLeg.rotation.x = thighPitchX;
       if (this.leftKnee) this.leftKnee.rotation.x = kneeBendX;
       if (this.rightKnee) this.rightKnee.rotation.x = kneeBendX;
-      if (this.leftArm) this.leftArm.rotation.x = -0.52;
-      if (this.rightArm) this.rightArm.rotation.x = -0.52;
+      if (this.leftArm) this.leftArm.rotation.x = -0.38;
+      if (this.rightArm) this.rightArm.rotation.x = -0.38;
+      if (this.leftForearm) this.leftForearm.rotation.x = -0.52;
+      if (this.rightForearm) this.rightForearm.rotation.x = -0.52;
     } else {
       this.rigRoot.position.y = 0;
       if (this.leftLeg) this.leftLeg.rotation.x = 0;
@@ -205,15 +370,322 @@ export class Avatar3D {
       if (this.rightKnee) this.rightKnee.rotation.x = 0;
       if (this.leftArm) this.leftArm.rotation.x = 0;
       if (this.rightArm) this.rightArm.rotation.x = 0;
+      if (this.leftForearm) this.leftForearm.rotation.x = 0;
+      if (this.rightForearm) this.rightForearm.rotation.x = 0;
     }
   }
 
   dispose() {
+    if (this._isDisposed) return;
     this._isDisposed = true;
+
     if (this._riggedModel) {
       this._riggedModel.dispose();
       this._riggedModel = null;
     }
+
+    // Collect shared cached textures so we never destroy shared textures used by other avatars
+    const sharedTextures = new Set(characterTextures.cache ? characterTextures.cache.values() : []);
+    const disposedGeos = new Set();
+    const disposedMats = new Set();
+
+    const disposeMat = (mat) => {
+      if (!mat || disposedMats.has(mat)) return;
+      disposedMats.add(mat);
+      const texKeys = ['map', 'bumpMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap'];
+      for (const key of texKeys) {
+        const tex = mat[key];
+        if (tex && !sharedTextures.has(tex) && typeof tex.dispose === 'function') {
+          tex.dispose();
+        }
+      }
+      if (mat.userData && mat.userData.irisTex) {
+        delete mat.userData.irisTex;
+      }
+      if (typeof mat.dispose === 'function') {
+        mat.dispose();
+      }
+    };
+
+    this.group.traverse((child) => {
+      if (child.geometry && !disposedGeos.has(child.geometry)) {
+        disposedGeos.add(child.geometry);
+        child.geometry.dispose();
+      }
+      if (Array.isArray(child.material)) {
+        child.material.forEach(disposeMat);
+      } else if (child.material) {
+        disposeMat(child.material);
+      }
+    });
+
+    this.proceduralParts = [];
+    this.leftLeg = null;
+    this.rightLeg = null;
+    this.leftKnee = null;
+    this.rightKnee = null;
+    this.leftArm = null;
+    this.rightArm = null;
+    this.leftForearm = null;
+    this.rightForearm = null;
+    this.torso = null;
+    this.head = null;
+    this.shadow = null;
+  }
+
+  /**
+   * Builds Phase 16D Stylized V2 Digital Human (Sims-inspired proportions, smooth loft anatomy,
+   * sculpted jawline & facial sockets, merged draw calls, articulated elbows).
+   */
+  buildStylizedCharacterV2() {
+    const skinHex = this.config.skinColor || '#F1C27D';
+    const hairCol = this.config.hairColor || '#1A1A24';
+    const hairStyle = this.config.hairStyle || 'short';
+    const outfit = this.config.outfit || 'traditional_gold';
+    const accessory = this.config.accessory || 'none';
+
+    const skinBump = characterTextures.getSkinBumpMap();
+    const irisTex = characterTextures.getIrisTexture();
+    const fabricMap = characterTextures.getBatikFabricTexture(outfit);
+    const hairMap = characterTextures.getHairTexture(hairCol);
+    const leatherMap = characterTextures.getLeatherShoeTexture();
+
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(skinHex),
+      roughness: 0.56,
+      metalness: 0.01,
+      bumpMap: skinBump,
+      bumpScale: 0.0025
+    });
+    skinMat.userData = { irisTex };
+
+    const lipColor = new THREE.Color(skinHex).lerp(new THREE.Color('#b64e58'), 0.42);
+    const lipMat = new THREE.MeshStandardMaterial({
+      color: lipColor,
+      roughness: 0.40,
+      metalness: 0.04
+    });
+
+    let accentHex = '#d4af37';
+    if (outfit === 'traditional_maroon') accentHex = '#e6be58';
+    else if (outfit === 'beskap_hitam') accentHex = '#d4af37';
+    else if (outfit === 'kebaya_putih') accentHex = '#e5cf8e';
+    else if (outfit === 'tuxedo') accentHex = '#f8f9fa';
+
+    const fabricMat = new THREE.MeshStandardMaterial({
+      map: fabricMap,
+      roughness: outfit === 'kebaya_putih' ? 0.64 : 0.72,
+      metalness: outfit === 'beskap_hitam' ? 0.08 : 0.05
+    });
+
+    const lowerFabricMat = outfit === 'kebaya_putih'
+      ? new THREE.MeshStandardMaterial({
+          map: characterTextures.getBatikFabricTexture('batik_jarik'),
+          roughness: 0.74,
+          metalness: 0.04
+        })
+      : fabricMat;
+
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(accentHex),
+      roughness: 0.30,
+      metalness: 0.78
+    });
+
+    const shoeMat = new THREE.MeshStandardMaterial({
+      map: leatherMap,
+      color: new THREE.Color('#16161b'),
+      roughness: 0.38,
+      metalness: 0.10
+    });
+
+    const hairMat = new THREE.MeshStandardMaterial({
+      map: hairMap,
+      color: new THREE.Color(hairCol),
+      roughness: 0.54,
+      metalness: 0.03
+    });
+
+    // Grounding Contact Shadow scaled cleanly to V2 footprint
+    const shadowGroup = new THREE.Group();
+    const innerShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.42, 20),
+      new THREE.MeshBasicMaterial({ color: '#000000', opacity: 0.36, transparent: true, depthWrite: false })
+    );
+    innerShadow.rotation.x = -Math.PI / 2;
+    innerShadow.position.y = 0.005;
+    shadowGroup.add(innerShadow);
+
+    const outerShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.68, 20),
+      new THREE.MeshBasicMaterial({ color: '#000000', opacity: 0.14, transparent: true, depthWrite: false })
+    );
+    outerShadow.rotation.x = -Math.PI / 2;
+    outerShadow.position.y = 0.004;
+    shadowGroup.add(outerShadow);
+    this.shadow = shadowGroup;
+    this.group.add(this.shadow);
+
+    // Legs (natural hip stance ±0.102m, sole flush at y = 0)
+    const leftLegBuilt = buildStylizedLegGroup(-0.102, true, lowerFabricMat, shoeMat, accentMat);
+    const rightLegBuilt = buildStylizedLegGroup(0.102, false, lowerFabricMat, shoeMat, accentMat);
+    this.leftLeg = leftLegBuilt.legGroup;
+    this.leftKnee = leftLegBuilt.kneeGroup;
+    this.rightLeg = rightLegBuilt.legGroup;
+    this.rightKnee = rightLegBuilt.kneeGroup;
+    this.rigRoot.add(this.leftLeg);
+    this.rigRoot.add(this.rightLeg);
+
+    // Continuous Lofted Torso + Neck
+    this.torso = buildStylizedTorsoGroup(fabricMat, lowerFabricMat, accentMat, skinMat, outfit);
+    this.rigRoot.add(this.torso);
+
+    // Tapered Articulated Arms + 5-Finger Hands (tucked cleanly into sloped clavicle)
+    const isSlimSilhouette = outfit === 'kebaya_putih' || outfit === 'traditional_maroon' || outfit === 'dress';
+    const shoulderX = isSlimSilhouette ? 0.194 : 0.220;
+    const leftArmBuilt = buildStylizedArmGroup(-shoulderX, true, fabricMat, accentMat, skinMat);
+    const rightArmBuilt = buildStylizedArmGroup(shoulderX, false, fabricMat, accentMat, skinMat);
+    this.leftArm = leftArmBuilt.armGroup;
+    this.leftForearm = leftArmBuilt.forearmGroup;
+    this.rightArm = rightArmBuilt.armGroup;
+    this.rightForearm = rightArmBuilt.forearmGroup;
+    this.rigRoot.add(this.leftArm);
+    this.rigRoot.add(this.rightArm);
+
+    // Sculpted Stylized Head + Face + Hair + Accessories
+    this.head = buildStylizedHeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, accessory, accentMat);
+    this.rigRoot.add(this.head);
+
+    this.proceduralParts = [this.leftLeg, this.rightLeg, this.torso, this.leftArm, this.rightArm, this.head];
+  }
+
+  /**
+   * Builds Phase 16E Stylized V3 Natural Human (Sims-inspired 7.18-heads proportions,
+   * sculpted craniofacial anatomy, open-face hairline hair & open-face pashmina hijab,
+   * dimorphic silhouette & relaxed natural stance).
+   */
+  buildStylizedCharacterV3() {
+    const skinHex = this.config.skinColor || '#F1C27D';
+    const hairCol = this.config.hairColor || '#1A1A24';
+    const hairStyle = this.config.hairStyle || 'short';
+    const outfit = this.config.outfit || 'traditional_gold';
+    const accessory = this.config.accessory || 'none';
+
+    const profile = resolveV3SilhouetteProfile(this.config);
+    this._v3Profile = profile;
+
+    const irisTex = characterTextures.getStylizedIrisTexture();
+    const fabricMap = characterTextures.getBatikFabricTexture(outfit);
+    const leatherMap = characterTextures.getLeatherShoeTexture();
+
+    // Smooth matte/semi-matte skin without noisy pores or bump maps
+    const skinMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(skinHex),
+      roughness: 0.72,
+      metalness: 0.0
+    });
+    skinMat.userData = { irisTex };
+
+    const lipColor = new THREE.Color(skinHex).lerp(new THREE.Color('#b65d58'), 0.42);
+    const lipMat = new THREE.MeshStandardMaterial({
+      color: lipColor,
+      roughness: 0.56,
+      metalness: 0.0
+    });
+
+    let accentHex = '#d4af37';
+    if (outfit === 'traditional_maroon') accentHex = '#e6be58';
+    else if (outfit === 'beskap_hitam') accentHex = '#d4af37';
+    else if (outfit === 'kebaya_putih') accentHex = '#e5cf8e';
+    else if (outfit === 'tuxedo') accentHex = '#f8f9fa';
+
+    const fabricMat = new THREE.MeshStandardMaterial({
+      map: fabricMap,
+      roughness: outfit === 'kebaya_putih' ? 0.70 : 0.76,
+      metalness: outfit === 'beskap_hitam' ? 0.05 : 0.03
+    });
+
+    const lowerFabricMat = outfit === 'kebaya_putih'
+      ? new THREE.MeshStandardMaterial({
+          map: characterTextures.getBatikFabricTexture('batik_jarik'),
+          roughness: 0.78,
+          metalness: 0.02
+        })
+      : fabricMat;
+
+    const accentMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(accentHex),
+      roughness: 0.34,
+      metalness: 0.72
+    });
+
+    const shoeMat = new THREE.MeshStandardMaterial({
+      map: leatherMap,
+      color: new THREE.Color('#16161b'),
+      roughness: 0.44,
+      metalness: 0.06
+    });
+
+    // Clean matte stylized hair (no plastic/streaked specular band)
+    const hairMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(hairCol),
+      roughness: 0.78,
+      metalness: 0.0
+    });
+
+    // Grounding Contact Shadow
+    const shadowGroup = new THREE.Group();
+    const innerShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.40, 20),
+      new THREE.MeshBasicMaterial({ color: '#000000', opacity: 0.34, transparent: true, depthWrite: false })
+    );
+    innerShadow.rotation.x = -Math.PI / 2;
+    innerShadow.position.y = 0.005;
+    shadowGroup.add(innerShadow);
+
+    const outerShadow = new THREE.Mesh(
+      new THREE.CircleGeometry(0.64, 20),
+      new THREE.MeshBasicMaterial({ color: '#000000', opacity: 0.13, transparent: true, depthWrite: false })
+    );
+    outerShadow.rotation.x = -Math.PI / 2;
+    outerShadow.position.y = 0.004;
+    shadowGroup.add(outerShadow);
+    this.shadow = shadowGroup;
+    this.group.add(this.shadow);
+
+    // Legs
+    const leftLegBuilt = buildV3LegGroup(-profile.thighOffsetX, lowerFabricMat, shoeMat, accentMat, profile);
+    const rightLegBuilt = buildV3LegGroup(profile.thighOffsetX, lowerFabricMat, shoeMat, accentMat, profile);
+    this.leftLeg = leftLegBuilt.legGroup;
+    this.leftKnee = leftLegBuilt.kneeGroup;
+    this.rightLeg = rightLegBuilt.legGroup;
+    this.rightKnee = rightLegBuilt.kneeGroup;
+    this.rigRoot.add(this.leftLeg);
+    this.rigRoot.add(this.rightLeg);
+
+    // Torso
+    this.torso = buildV3TorsoGroup(fabricMat, lowerFabricMat, accentMat, skinMat, outfit, profile, hairStyle);
+    this.rigRoot.add(this.torso);
+
+    // Arms with initial relaxed Sims resting stance
+    const leftArmBuilt = buildV3ArmGroup(-profile.shoulderHalfWidth, true, fabricMat, accentMat, skinMat, profile);
+    const rightArmBuilt = buildV3ArmGroup(profile.shoulderHalfWidth, false, fabricMat, accentMat, skinMat, profile);
+    this.leftArm = leftArmBuilt.armGroup;
+    this.leftForearm = leftArmBuilt.forearmGroup;
+    this.rightArm = rightArmBuilt.armGroup;
+    this.rightForearm = rightArmBuilt.forearmGroup;
+    this.leftArm.rotation.z = -profile.armRestAbductionZ;
+    this.rightArm.rotation.z = profile.armRestAbductionZ;
+    this.leftForearm.rotation.x = profile.elbowRestBendX;
+    this.rightForearm.rotation.x = profile.elbowRestBendX;
+    this.rigRoot.add(this.leftArm);
+    this.rigRoot.add(this.rightArm);
+
+    // Head + Face + Open-Face Hair / Hijab
+    this.head = buildV3HeadGroup(skinMat, lipMat, hairMat, hairStyle, hairCol, accessory, accentMat, profile);
+    this.rigRoot.add(this.head);
+
+    this.proceduralParts = [this.leftLeg, this.rightLeg, this.torso, this.leftArm, this.rightArm, this.head];
   }
 
   buildRealisticCharacter() {

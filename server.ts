@@ -248,6 +248,22 @@ app.get('/api/assets/status', (_req: Request, res: Response) => {
     '05_just_you.mp3': checkFile(tracksDir, '05_just_you.mp3'),
   };
 
+  let availableModels: string[] = [];
+  try {
+    if (fs.existsSync(modelsDir)) {
+      availableModels = fs.readdirSync(modelsDir)
+        .filter((f) => f.toLowerCase().endsWith('.glb'))
+        .sort();
+    }
+  } catch {
+    availableModels = [];
+  }
+
+  const extraCharacters: Record<string, boolean> = {};
+  for (const fname of availableModels) {
+    extraCharacters[fname] = true;
+  }
+
   return res.json({
     status: 'ok',
     audio: {
@@ -269,7 +285,9 @@ app.get('/api/assets/status', (_req: Request, res: Response) => {
         'guest.glb': checkFile(modelsDir, 'guest.glb'),
         'groom.glb': checkFile(modelsDir, 'groom.glb'),
         'bride.glb': checkFile(modelsDir, 'bride.glb'),
+        ...extraCharacters,
       },
+      availableFiles: availableModels,
     },
   });
 });

@@ -9,8 +9,29 @@ export const AVATAR_RIG_DIMENSIONS = Object.freeze({
   THIGH_RADIUS_AT_HIP: 0.088, // Radius of upper thigh / glutes resting on cushion
   THIGH_LENGTH: 0.44,       // Distance from hip pivot to knee pivot
   CALF_PLUS_SHOE: 0.54,     // Distance from knee pivot down to shoe sole bottom (0.44 + 0.10)
-  PELVIS_DEPTH: 0.14        // Rear thickness from spine centerline to lower back surface
+  PELVIS_DEPTH: 0.14,       // Rear thickness from spine centerline to lower back surface
+  GLB_CANONICAL_SIT_HEIGHT: 0.45 // Standard chair cushion height assumed by baked GLB sitting animation clips
 });
+
+/**
+ * Compute vertical root offset specifically for rigged skeletal GLB models whose
+ * 'sitting' clip already lowers hips from standing to cushion height in local space.
+ * Prevents applying procedural -0.44m rigRoot shift that would sink GLB models underground.
+ */
+export function computeGlbSeatingAlignment({
+  cushionTopY = 0.475,
+  supportFloorY = 0.0,
+  canonicalSitHeight = AVATAR_RIG_DIMENSIONS.GLB_CANONICAL_SIT_HEIGHT
+} = {}) {
+  const localSeatHeight = Math.max(0.2, cushionTopY - supportFloorY);
+  const rawDelta = localSeatHeight - canonicalSitHeight;
+  // Clamp downward drop slightly so GLB shoe soles remain flush with stage/floor surface
+  const glbRootOffsetY = Math.max(-0.04, Math.min(0.12, rawDelta));
+  return {
+    localSeatHeight,
+    glbRootOffsetY
+  };
+}
 
 /**
  * Compute anatomical sitting pose and exact world vertical placement.
@@ -51,6 +72,7 @@ export function computeSeatingRigPose({
   // Horizontal anchor nudges avatar slightly back toward backrest while keeping thighs centered
   const worldX = seatCenterX + Math.sin(faceAngle) * seatDepthForwardOffset;
   const worldZ = seatCenterZ + Math.cos(faceAngle) * seatDepthForwardOffset;
+  const glbAlignment = computeGlbSeatingAlignment({ cushionTopY, supportFloorY });
 
   return {
     rootPosition: {
@@ -60,6 +82,7 @@ export function computeSeatingRigPose({
     },
     faceAngle,
     hipOffsetY: hipDropFromStanding,
+    glbRootOffsetY: glbAlignment.glbRootOffsetY,
     thighPitchX: -Math.PI / 2,
     kneeBendX: kneeBendAngle,
     targetHipWorldY,

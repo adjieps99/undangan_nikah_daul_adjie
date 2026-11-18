@@ -13,8 +13,34 @@ import {
 
 import {
   AVATAR_RIG_DIMENSIONS,
+  computeGlbSeatingAlignment,
   computeSeatingRigPose
 } from '../static/js/characters/SeatingAnchor.js';
+import {
+  ADJIE_PROTOTYPE_POSES,
+  ADJIE_PROTOTYPE_VIEWS,
+  STYLE_C_STANDARD,
+  classifyCharacterMaterialKind,
+  computeUniformModelScale,
+  isModelAssetAvailable
+} from '../static/js/characters/CharacterPipeline.js';
+import {
+  STYLIZED_V2_PROPORTIONS,
+  computeStylizedFaceTint,
+  computeStylizedHeadVertex,
+  dampValue,
+  resolveWalkingAnimPhase,
+  sampleStylizedCrossSectionPoint
+} from '../static/js/characters/StylizedMath.js';
+import {
+  STYLIZED_V3_PROPORTIONS,
+  computeV3FaceTint,
+  computeV3HeadVertex,
+  resolveV3SilhouetteProfile,
+  sampleHijabAperturePoint,
+  sampleHijabHoodPoint,
+  sampleScalpHairlinePoint
+} from '../static/js/characters/StylizedMathV3.js';
 
 import { TerrainManager } from '../static/js/world/TerrainManager.js';
 import { WEDDING_DATA } from '../static/js/data/wedding.js';
@@ -192,9 +218,17 @@ test('wedding data preserves official couple details, attire rules, 6 favorite r
     { name: 'Rumah Makan Karya Bundo', url: 'https://share.google/Wm3DYP8YlqDnqKVzN' }
   ];
   expectedRestaurants.forEach((exp, idx) => {
-    assert.equal(WEDDING_DATA.favoriteRestaurants[idx].name, exp.name);
-    assert.equal(WEDDING_DATA.favoriteRestaurants[idx].mapsUrl, exp.url);
+    const place = WEDDING_DATA.favoriteRestaurants[idx];
+    assert.equal(place.name, exp.name);
+    assert.equal(place.mapsUrl, exp.url);
+    assert.equal(Array.isArray(place.mustTry), true);
+    assert.ok(place.mustTry.length >= 2, `${place.name} must have mustTry recommendations`);
+    assert.equal(typeof place.note, 'string');
+    assert.ok(place.note.length > 20, `${place.name} must have personal recommendation note`);
+    assert.equal(/rp\s*\d|harga|murah|mahal|kolesterol|penyakit/i.test(place.note), false);
   });
+  const karyaBundo = WEDDING_DATA.favoriteRestaurants[5];
+  assert.ok(/SERA/i.test(karyaBundo.note) && /JakLingko/i.test(karyaBundo.note));
 });
 
 test('ASSET_MANIFEST binds default opening track and exact audio/image/model paths', () => {
@@ -298,4 +332,168 @@ test('CameraFraming guarantees unobstructed +Z outdoor exit view and ceiling-saf
   assert.equal(clamped.y, MAIN_HALL_BOUNDS.maxY);
   assert.equal(clamped.z, MAIN_HALL_BOUNDS.minZ);
   assert.ok(MAIN_HALL_INTRO_CONFIG.duration > 1.0);
+});
+
+test('CharacterPipeline resolves /api/assets/status filename keys, scaling, PBR kind, and GLB seating alignment', () => {
+  const serverStatusMock = {
+    status: 'ok',
+    models: {
+      characters: {
+        'guest.glb': false,
+        'groom.glb': true,
+        'bride.glb': false
+      }
+    }
+  };
+
+  assert.equal(isModelAssetAvailable(serverStatusMock, 'groom', 'groom.glb'), true);
+  assert.equal(isModelAssetAvailable(serverStatusMock, 'groom'), true);
+  assert.equal(isModelAssetAvailable(serverStatusMock, 'bride', 'bride.glb'), false);
+  assert.equal(isModelAssetAvailable(null, 'groom', 'groom.glb'), false);
+
+  assert.equal(computeUniformModelScale(1.76, 1.76), 1);
+  assert.ok(Math.abs(computeUniformModelScale(1.76, 2.34) - 1.329545) < 0.001);
+  assert.equal(computeUniformModelScale(0, 1.76), 1);
+
+  assert.equal(classifyCharacterMaterialKind('M_Skin_Head', 'Adjie_Head'), 'skin');
+  assert.equal(classifyCharacterMaterialKind('M_Hair_Short', 'Hair'), 'hair');
+  assert.equal(classifyCharacterMaterialKind('M_Gold_Buttons', 'Beskap_Chain'), 'metalAccent');
+  assert.equal(classifyCharacterMaterialKind('M_Beskap_Velvet', 'Torso'), 'fabric');
+
+  // GLB seating alignment must never inherit procedural -0.44m hip drop
+  const banquetGlb = computeGlbSeatingAlignment({ cushionTopY: 0.475, supportFloorY: 0.0 });
+  assert.ok(Math.abs(banquetGlb.glbRootOffsetY - 0.025) < 0.001);
+
+  const pelaminanPose = computeSeatingRigPose({
+    cushionTopY: 0.74,
+    supportFloorY: 0.36,
+    seatCenterX: 0.62,
+    seatCenterZ: -14.15,
+    faceAngle: 0
+  });
+  assert.ok(pelaminanPose.glbRootOffsetY >= -0.04 && pelaminanPose.glbRootOffsetY <= 0.05);
+  assert.ok(pelaminanPose.hipOffsetY < -0.5); // procedural offset unchanged
+
+  assert.equal(STYLE_C_STANDARD.id, 'STYLE_C_SEMI_REALISTIC_CINEMATIC');
+  assert.deepEqual(Object.keys(ADJIE_PROTOTYPE_VIEWS), ['front', 'three_quarter', 'side', 'back']);
+  assert.deepEqual(Object.keys(ADJIE_PROTOTYPE_POSES), ['standing', 'walking', 'sitting', 'greeting']);
+});
+
+test('StylizedMath defines Sims-inspired adult proportions, SeatingAnchor leg compatibility, sculpted face clearances, and smooth animation math', () => {
+  // Sole reaches y=0 cleanly so SeatingAnchor floor alignment works seamlessly
+  const soleY = STYLIZED_V2_PROPORTIONS.HIP_PIVOT_Y - STYLIZED_V2_PROPORTIONS.THIGH_LENGTH - STYLIZED_V2_PROPORTIONS.CALF_PLUS_SHOE;
+  assert.ok(Math.abs(soleY) < 1e-6);
+
+  // Stylized adult head-to-body ratio ~6.4-6.8 heads tall (not oversized 5.0 puppet sphere)
+  const headFullHeight = STYLIZED_V2_PROPORTIONS.HEAD_RADIUS_Y * 2;
+  const headsTall = STYLIZED_V2_PROPORTIONS.TOTAL_STANDING_HEIGHT / headFullHeight;
+  assert.ok(headsTall >= 6.2 && headsTall <= 7.2, `Expected stylized adult ratio 6.2-7.2, got ${headsTall}`);
+
+  // Hairline clearance stays comfortably behind front face plane
+  assert.ok(STYLIZED_V2_PROPORTIONS.HAIR_FRONT_Z_CLEARANCE < 0.11);
+
+  // Sculpted head tapers jaw cleanly below cheek level and recesses eye sockets relative to brow ridge
+  const templePt = computeStylizedHeadVertex(1, 0.25, 0);
+  const jawPt = computeStylizedHeadVertex(1, -0.75, 0);
+  assert.ok(Math.abs(jawPt.x) < Math.abs(templePt.x), 'Jawline must taper inward relative to upper cranium');
+
+  const socketPt = computeStylizedHeadVertex(0.33, 0.12, 0.93);
+  const browPt = computeStylizedHeadVertex(0.31, 0.29, 0.90);
+  assert.ok(socketPt.z < browPt.z, 'Orbital eye socket should be slightly recessed beneath brow ridge');
+
+  // Cross-section front bulge & back spine indentation work properly
+  const frontChest = sampleStylizedCrossSectionPoint({ y: 0.58, rx: 0.22, rz: 0.13, frontBulge: 0.02, backIndent: 0.01 }, Math.PI / 2);
+  const backSpine = sampleStylizedCrossSectionPoint({ y: 0.58, rx: 0.22, rz: 0.13, frontBulge: 0.02, backIndent: 0.01 }, -Math.PI / 2);
+  assert.ok(frontChest.z > 0.14);
+  assert.ok(backSpine.z > -0.13);
+
+  // Walking phase advances monotonically with animTime even when isWalkingView is true (fixes frozen 1.05 bug)
+  const p1 = resolveWalkingAnimPhase(1.0, { isWalkingView: true });
+  const p2 = resolveWalkingAnimPhase(2.5, { isWalkingView: true });
+  assert.ok(p2 > p1);
+
+  // Exponential smoothing moves monotonically toward target and never overshoots
+  const d1 = dampValue(0, 1.0, 10, 0.016);
+  const d2 = dampValue(d1, 1.0, 10, 0.016);
+  assert.ok(d1 > 0 && d1 < d2 && d2 < 1.0);
+
+  // Face tint adds subtle rosy warmth on cheeks and subtle shadow beneath jaw
+  const cheekTint = computeStylizedFaceTint(0.45, -0.15, 0.88);
+  const chinTint = computeStylizedFaceTint(0, -0.95, 0.25);
+  assert.ok(cheekTint.r > cheekTint.g && cheekTint.r > 1.0);
+  assert.ok(chinTint.r < 1.0 && chinTint.b < 1.0);
+});
+
+test('StylizedMathV3 enforces ~7.18-heads natural human proportions, SeatingAnchor sole=0, dimorphism, and 100% open-face hair/hijab clearances', () => {
+  // Sole reaches y=0 cleanly so SeatingAnchor alignment stays intact
+  const soleY = STYLIZED_V3_PROPORTIONS.HIP_PIVOT_Y - STYLIZED_V3_PROPORTIONS.THIGH_LENGTH - STYLIZED_V3_PROPORTIONS.CALF_PLUS_SHOE;
+  assert.ok(Math.abs(soleY) < 1e-6);
+
+  // ~7.18 heads-tall natural adult ratio
+  const headFullHeight = STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y * 2;
+  const headsTall = STYLIZED_V3_PROPORTIONS.TOTAL_STANDING_HEIGHT / headFullHeight;
+  assert.ok(headsTall >= 7.0 && headsTall <= 7.4, `Expected ~7.18 heads tall, got ${headsTall}`);
+
+  // Dimorphic silhouette profiles
+  const male = resolveV3SilhouetteProfile({ outfit: 'beskap_hitam' });
+  const female = resolveV3SilhouetteProfile({ outfit: 'kebaya_putih' });
+  assert.equal(male.isFeminine, false);
+  assert.equal(female.isFeminine, true);
+  assert.ok(male.shoulderHalfWidth > female.shoulderHalfWidth);
+  assert.ok(female.waistRx < male.waistRx);
+  assert.ok(female.hipRx > male.hipRx);
+  assert.ok(male.armRestAbductionZ >= 0.08 && female.armRestAbductionZ >= 0.08);
+
+  // Head jaw taper & orbital recess
+  const temple = computeV3HeadVertex(1, 0.20, 0, false);
+  const jaw = computeV3HeadVertex(1, -0.78, 0, false);
+  assert.ok(Math.abs(jaw.x) < Math.abs(temple.x));
+
+  const socket = computeV3HeadVertex(0.34, 0.10, 0.935, false);
+  const brow = computeV3HeadVertex(0.32, 0.29, 0.90, false);
+  assert.ok(socket.z < brow.z);
+
+  // Center forehead hairline (u=0, t=0) stays strictly above eyebrows
+  const hairlineFront = sampleScalpHairlinePoint(0, 0, 0.011, false);
+  assert.ok(
+    hairlineFront.y > STYLIZED_V3_PROPORTIONS.BROW_CENTER_Y + 0.03,
+    `Hairline (${hairlineFront.y}) must clear eyebrows (${STYLIZED_V3_PROPORTIONS.BROW_CENTER_Y})`
+  );
+
+  // Hijab open-face oval aperture clears top forehead, lateral eyes/cheeks, and under-chin
+  const hijabTop = sampleHijabAperturePoint(0, true);
+  const hijabRight = sampleHijabAperturePoint(Math.PI / 2, true);
+  const hijabLeft = sampleHijabAperturePoint((3 * Math.PI) / 2, true);
+  const hijabBot = sampleHijabAperturePoint(Math.PI, true);
+
+  assert.ok(hijabTop.y > STYLIZED_V3_PROPORTIONS.BROW_CENTER_Y + 0.03);
+  assert.ok(hijabRight.x > STYLIZED_V3_PROPORTIONS.EYE_HALF_SPACING_X + 0.035);
+  assert.ok(hijabLeft.x < -(STYLIZED_V3_PROPORTIONS.EYE_HALF_SPACING_X + 0.035));
+  assert.ok(hijabBot.y < -0.10);
+
+  // Seam continuity check across u=0 and u=2*PI (no discontinuous slit at forehead center)
+  const hijabEnd = sampleHijabAperturePoint(Math.PI * 2, true);
+  assert.ok(Math.hypot(hijabTop.x - hijabEnd.x, hijabTop.y - hijabEnd.y, hijabTop.z - hijabEnd.z) < 1e-6);
+  const hijabLeftEps = sampleHijabAperturePoint(-1e-4, true);
+  const hijabRightEps = sampleHijabAperturePoint(1e-4, true);
+  assert.ok(Math.abs(hijabRightEps.x - hijabLeftEps.x) < 1e-4);
+
+  // Spherical hijab hood must strictly wrap outside top crown & back occiput (zero bald skull clipping!)
+  const hijabCrown = sampleHijabHoodPoint(0, 0.30, true);
+  const hijabBack = sampleHijabHoodPoint(0, 0.95, true);
+  assert.ok(hijabCrown.y > STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y, `Crown hijab y (${hijabCrown.y}) must exceed skull top (${STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y})`);
+  assert.ok(hijabBack.z < -STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z, `Back hijab z (${hijabBack.z}) must wrap behind occiput`);
+  for (const tSample of [0.15, 0.30, 0.50, 0.75]) {
+    const pt = sampleHijabHoodPoint(0, tSample, true);
+    const normR = Math.hypot(
+      pt.x / (STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_X * 0.96),
+      pt.y / STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Y,
+      pt.z / (STYLIZED_V3_PROPORTIONS.HEAD_RADIUS_Z * 0.97)
+    );
+    assert.ok(normR > 1.04, `Hijab at t=${tSample} must stay outside skull (normR=${normR})`);
+  }
+
+  // Subtle facial warmth tinting
+  const cheekTint = computeV3FaceTint(0.44, -0.12, 0.88);
+  assert.ok(cheekTint.r > cheekTint.g && cheekTint.r > 1.0);
 });

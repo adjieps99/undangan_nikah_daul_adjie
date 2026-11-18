@@ -100,64 +100,116 @@ class CharacterTextureFactory {
       ctx.stroke();
     }
 
-    // 2. Limbal Ring (Outer dark border of iris)
-    const irisRadius = 68;
+    // 2. Limbal Ring (Outer dark border of iris — balanced ratio so warm sclera frames the iris)
+    const irisRadius = 42;
     ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, irisRadius, 0, Math.PI * 2);
     ctx.clip();
 
     // Base iris color gradient
-    const irisGrad = ctx.createRadialGradient(cx, cy, 18, cx, cy, irisRadius);
+    const irisGrad = ctx.createRadialGradient(cx, cy, 12, cx, cy, irisRadius);
     irisGrad.addColorStop(0, '#5a381e');
-    irisGrad.addColorStop(0.4, irisColorHex);
+    irisGrad.addColorStop(0.42, irisColorHex);
     irisGrad.addColorStop(0.85, '#221308');
     irisGrad.addColorStop(1.0, '#0c0703'); // Dark pronounced limbal ring
     ctx.fillStyle = irisGrad;
     ctx.fillRect(cx - irisRadius, cy - irisRadius, irisRadius * 2, irisRadius * 2);
 
     // 3. Radial Melanin Fibers / Striae
-    for (let r = 0; r < 140; r++) {
-      const a = (r * Math.PI * 2) / 140;
-      const len = 20 + Math.random() * (irisRadius - 22);
+    for (let r = 0; r < 110; r++) {
+      const a = (r * Math.PI * 2) / 110;
+      const len = 14 + Math.random() * (irisRadius - 15);
       const isHighlight = Math.random() > 0.65;
       ctx.strokeStyle = isHighlight ? 'rgba(210, 160, 110, 0.45)' : 'rgba(15, 8, 3, 0.55)';
       ctx.lineWidth = isHighlight ? 1.0 : 0.8;
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a) * 20, cy + Math.sin(a) * 20);
+      ctx.moveTo(cx + Math.cos(a) * 14, cy + Math.sin(a) * 14);
       ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
       ctx.stroke();
     }
 
     // 4. Inner Collarette Ring
     ctx.strokeStyle = 'rgba(215, 170, 110, 0.4)';
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    ctx.arc(cx, cy, 32, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 21, 0, Math.PI * 2);
     ctx.stroke();
 
     // 5. Deep Black Pupil
-    const pupilGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 22);
+    const pupilGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, 15);
     pupilGrad.addColorStop(0, '#020202');
     pupilGrad.addColorStop(0.85, '#080808');
     pupilGrad.addColorStop(1.0, '#1a120c');
     ctx.fillStyle = pupilGrad;
     ctx.beginPath();
-    ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+    ctx.arc(cx, cy, 15, 0, Math.PI * 2);
     ctx.fill();
 
     // 6. Corneal Specular Reflection (Glint of light giving life to eyes)
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.94)';
     ctx.beginPath();
-    ctx.ellipse(cx - 14, cy - 14, 5, 4, -0.4, 0, Math.PI * 2);
+    ctx.ellipse(cx - 10, cy - 10, 4.5, 3.6, -0.4, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.60)';
     ctx.beginPath();
-    ctx.arc(cx + 10, cy + 12, 2.2, 0, Math.PI * 2);
+    ctx.arc(cx + 8, cy + 9, 2.0, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.cache.set(key, texture);
+    return texture;
+  }
+
+  /**
+   * Minimalist clean stylized eye texture (crisp white sclera, clean dark iris, bright catchlight)
+   */
+  getStylizedIrisTexture(irisColorHex = '#2c1b10') {
+    const key = `stylized_iris_${irisColorHex}`;
+    if (this.cache.has(key)) return this.cache.get(key);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    const cx = 128;
+    const cy = 128;
+
+    // Clean warm-white sclera (zero capillaries or mottled edges)
+    ctx.fillStyle = '#fcfbf8';
+    ctx.fillRect(0, 0, 256, 256);
+
+    // Expressive crisp stylized iris (clean sclera framing left & right)
+    const irisRadius = 40;
+    const irisGrad = ctx.createRadialGradient(cx, cy, 8, cx, cy, irisRadius);
+    irisGrad.addColorStop(0, irisColorHex);
+    irisGrad.addColorStop(0.78, '#23140b');
+    irisGrad.addColorStop(1, '#120a05');
+    ctx.fillStyle = irisGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, irisRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Soft deep pupil
+    ctx.fillStyle = '#090604';
+    ctx.beginPath();
+    ctx.arc(cx, cy, 17, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Clean stylized catchlight glints
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.ellipse(cx - 10, cy - 10, 5.5, 4.4, -0.35, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.beginPath();
+    ctx.arc(cx + 8, cy + 9, 2.2, 0, Math.PI * 2);
+    ctx.fill();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -178,31 +230,31 @@ class CharacterTextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d');
 
-    let baseBg = '#1c150c';
-    let petalBg = '#a67c1e';
-    let goldAccent = '#ffd700';
-    let innerCore = '#591624';
+    let baseBg = '#281f14';
+    let petalBg = '#523e1e';
+    let goldAccent = '#b89446';
+    let innerCore = '#3a2b16';
 
     if (outfitType === 'traditional_maroon') {
-      baseBg = '#420816';
-      petalBg = '#7a1b2d';
-      goldAccent = '#e6be58';
-      innerCore = '#26040c';
+      baseBg = '#44121d';
+      petalBg = '#5e1c2b';
+      goldAccent = '#c29a52';
+      innerCore = '#320b14';
     } else if (outfitType === 'beskap_hitam') {
-      baseBg = '#121216';
-      petalBg = '#1c1c23';
+      baseBg = '#141419';
+      petalBg = '#1e1e25';
       goldAccent = '#d4af37';
-      innerCore = '#0a0a0d';
+      innerCore = '#0c0c10';
     } else if (outfitType === 'kebaya_putih') {
       baseBg = '#f8f6f0';
       petalBg = '#ece6d8';
       goldAccent = '#e3d5b8';
       innerCore = '#ffffff';
     } else if (outfitType === 'batik_jarik') {
-      baseBg = '#2c1b10';
-      petalBg = '#8c5a2b';
-      goldAccent = '#d9b25f';
-      innerCore = '#1a0e07';
+      baseBg = '#3b2416';
+      petalBg = '#5c3820';
+      goldAccent = '#a97e42';
+      innerCore = '#26160c';
     } else if (outfitType === 'tuxedo') {
       baseBg = '#141419';
       petalBg = '#1f1f26';
@@ -220,7 +272,7 @@ class CharacterTextureFactory {
     ctx.fillRect(0, 0, 256, 256);
 
     // Micro fabric twill weave lines
-    ctx.strokeStyle = outfitType === 'kebaya_putih' ? 'rgba(180, 165, 140, 0.14)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = outfitType === 'kebaya_putih' ? 'rgba(180, 165, 140, 0.14)' : 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 1;
     for (let y = 0; y < 256; y += 4) {
       ctx.beginPath();
@@ -230,8 +282,13 @@ class CharacterTextureFactory {
     }
 
     if (outfitType.startsWith('traditional') || outfitType === 'batik_jarik') {
-      // 2. Indonesian Traditional Kawung Pattern Grid (4 interlocking ellipse petals)
+      // 2. Refined Low-Contrast Indonesian Kawung / Songket Weave (soft elegance, never harsh checkerboard)
+      const isSongket = outfitType.startsWith('traditional');
       const step = 64;
+      ctx.save();
+      if (isSongket) {
+        ctx.globalAlpha = 0.42;
+      }
       for (let x = 0; x <= 256; x += step) {
         for (let y = 0; y <= 256; y += step) {
           ctx.save();
@@ -243,17 +300,18 @@ class CharacterTextureFactory {
 
             ctx.fillStyle = petalBg;
             ctx.beginPath();
-            ctx.ellipse(0, 22, 11, 20, 0, 0, Math.PI * 2);
+            ctx.ellipse(0, 22, 10, 18, 0, 0, Math.PI * 2);
             ctx.fill();
 
-            ctx.fillStyle = goldAccent;
+            ctx.strokeStyle = goldAccent;
+            ctx.lineWidth = isSongket ? 1.1 : 1.5;
             ctx.beginPath();
-            ctx.ellipse(0, 22, 5, 12, 0, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.ellipse(0, 22, 5, 11, 0, 0, Math.PI * 2);
+            ctx.stroke();
 
             ctx.fillStyle = innerCore;
             ctx.beginPath();
-            ctx.arc(0, 22, 2.5, 0, Math.PI * 2);
+            ctx.arc(0, 22, 2.2, 0, Math.PI * 2);
             ctx.fill();
 
             ctx.restore();
@@ -261,21 +319,22 @@ class CharacterTextureFactory {
 
           ctx.fillStyle = goldAccent;
           ctx.beginPath();
-          ctx.moveTo(0, -9);
-          ctx.lineTo(9, 0);
-          ctx.lineTo(0, 9);
-          ctx.lineTo(-9, 0);
+          ctx.moveTo(0, -7);
+          ctx.lineTo(7, 0);
+          ctx.lineTo(0, 7);
+          ctx.lineTo(-7, 0);
           ctx.closePath();
           ctx.fill();
 
           ctx.fillStyle = innerCore;
           ctx.beginPath();
-          ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+          ctx.arc(0, 0, 2.8, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.restore();
         }
       }
+      ctx.restore();
     } else if (outfitType === 'beskap_hitam') {
       // Fine jet-black Javanese velvet/silk diagonal sheen weave
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
@@ -335,7 +394,13 @@ class CharacterTextureFactory {
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(3, 3);
+    if (outfitType === 'batik_jarik') {
+      texture.repeat.set(1.5, 1.5);
+    } else if (outfitType.startsWith('traditional')) {
+      texture.repeat.set(2, 2);
+    } else {
+      texture.repeat.set(3, 3);
+    }
     this.cache.set(key, texture);
     return texture;
   }

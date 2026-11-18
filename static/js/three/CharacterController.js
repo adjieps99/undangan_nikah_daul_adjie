@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Avatar3D } from '../characters/Avatar3D.js';
 import { CHARACTER_ANIM_STATES } from '../characters/CharacterAnimator.js';
 import { computeSeatingRigPose } from '../characters/SeatingAnchor.js';
+import { resolveWalkingAnimPhase } from '../characters/StylizedMath.js';
 import { gameState } from '../state/GameState.js';
 import { TerrainManager } from '../world/TerrainManager.js';
 
@@ -344,7 +345,7 @@ export class CharacterController {
 
     // Dispatch footstep audio event on stride zero-crossing while walking grounded
     if (nextState === CHARACTER_ANIM_STATES.WALKING && !this.isJumping) {
-      const tAnim = isWalkingView ? 1.05 : this.animTime * 1.5;
+      const tAnim = resolveWalkingAnimPhase(this.animTime);
       const curPhase = Math.sin(tAnim);
       if (typeof this.prevStepPhase === 'number') {
         if ((this.prevStepPhase <= 0 && curPhase > 0) || (this.prevStepPhase >= 0 && curPhase < 0)) {

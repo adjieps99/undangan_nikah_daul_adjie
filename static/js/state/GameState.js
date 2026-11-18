@@ -14,6 +14,7 @@ export const PHASES = {
   OPENING_VIDEO: 'OPENING_VIDEO',
   EXPLORATION: 'EXPLORATION',
   MAIN_HALL: 'MAIN_HALL',
+  ADJIE_PROTOTYPE: 'ADJIE_PROTOTYPE',
   MODAL: 'MODAL'
 };
 
@@ -90,6 +91,8 @@ class GameState {
     const isDebug = params.get('debug') === '1' || params.get('debug') === 'true';
     if (isLocal || isDebug) {
       const p = params.get('phase');
+      const v = params.get('view');
+      if (p === 'adjie_prototype' || v === 'adjie_prototype') return PHASES.ADJIE_PROTOTYPE;
       if (p === 'hall' || p === 'main_hall') return PHASES.MAIN_HALL;
       if (p === 'opening' || p === 'opening_video') return PHASES.OPENING_VIDEO;
       if (p === 'exploration' || p === 'rsvp' || p === 'closing') return PHASES.EXPLORATION;

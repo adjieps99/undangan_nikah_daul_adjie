@@ -22,7 +22,7 @@ export function createFoodCourtModal() {
   content.appendChild(sectionHeading);
 
   const listWrap = document.createElement('div');
-  listWrap.style.cssText = 'display: flex; flex-direction: column; gap: 10px;';
+  listWrap.style.cssText = 'display: flex; flex-direction: column; gap: 12px;';
 
   restaurants.forEach((place) => {
     const card = document.createElement('div');
@@ -30,13 +30,15 @@ export function createFoodCourtModal() {
       background: rgba(255, 255, 255, 0.05);
       border: 1px solid rgba(212, 175, 55, 0.32);
       border-radius: 10px;
-      padding: 12px 14px;
+      padding: 14px 15px;
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      flex-direction: column;
+      gap: 8px;
       font-family: var(--font-sans);
     `;
+
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = 'display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;';
 
     const meta = document.createElement('div');
     meta.style.cssText = 'min-width: 0; flex: 1;';
@@ -51,17 +53,17 @@ export function createFoodCourtModal() {
         font-weight: 700;
         letter-spacing: 0.6px;
         color: ${isDaulika ? '#ffb6c1' : isTogether ? '#f5e6a3' : 'var(--color-gold)'};
-        margin-bottom: 4px;
+        margin-bottom: 3px;
       `;
       tag.textContent = tagParts.join(' • ');
       meta.appendChild(tag);
     }
 
     const title = document.createElement('div');
-    title.style.cssText = 'font-family: var(--font-serif); font-size: 15px; font-weight: 600; color: #ffffff; line-height: 1.35;';
+    title.style.cssText = 'font-family: var(--font-serif); font-size: 15.5px; font-weight: 600; color: #ffffff; line-height: 1.35;';
     title.textContent = place.name;
     meta.appendChild(title);
-    card.appendChild(meta);
+    headerRow.appendChild(meta);
 
     if (place.mapsUrl) {
       const link = document.createElement('a');
@@ -73,25 +75,63 @@ export function createFoodCourtModal() {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        padding: 7px 11px;
-        background: rgba(212, 175, 55, 0.16);
-        border: 1px solid rgba(212, 175, 55, 0.55);
+        padding: 6px 10px;
+        background: rgba(212, 175, 55, 0.14);
+        border: 1px solid rgba(212, 175, 55, 0.48);
         border-radius: 6px;
         color: var(--color-gold-light);
         font-family: var(--font-sans);
-        font-size: 11.5px;
+        font-size: 11px;
         font-weight: 600;
         text-decoration: none;
         white-space: nowrap;
       `;
-      link.textContent = '📍 Lokasi ↗';
-      card.appendChild(link);
+      link.textContent = 'Lihat di Maps →';
+      headerRow.appendChild(link);
+    }
+
+    card.appendChild(headerRow);
+
+    if (Array.isArray(place.mustTry) && place.mustTry.length > 0) {
+      const mustTryEl = document.createElement('div');
+      mustTryEl.style.cssText = 'font-size: 12px; color: #f5e6a3; line-height: 1.45;';
+      const label = document.createElement('span');
+      label.style.cssText = 'font-weight: 700; color: var(--color-gold);';
+      label.textContent = 'Must try: ';
+      const items = document.createElement('span');
+      items.textContent = place.mustTry.join(' • ');
+      mustTryEl.appendChild(label);
+      mustTryEl.appendChild(items);
+      card.appendChild(mustTryEl);
+    }
+
+    if (place.note) {
+      const noteEl = document.createElement('p');
+      noteEl.style.cssText = 'font-size: 12.5px; color: #e8e0d4; line-height: 1.55; margin: 0;';
+      noteEl.textContent = place.note;
+      card.appendChild(noteEl);
     }
 
     listWrap.appendChild(card);
   });
 
   content.appendChild(listWrap);
+
+  const closingNote = document.createElement('p');
+  closingNote.className = 'foodcourt-closing-note';
+  closingNote.style.cssText = `
+    margin: 16px 0 2px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(212, 175, 55, 0.24);
+    text-align: center;
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    font-style: italic;
+    color: #ffbe97;
+    line-height: 1.55;
+  `;
+  closingNote.textContent = 'Kalau kebetulan ketemu kami di salah satu tempat ini, jangan sungkan sapa-sapa ya!';
+  content.appendChild(closingNote);
 
   return createModal({
     id: 'foodcourt-modal',

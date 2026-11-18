@@ -9,6 +9,7 @@ class App {
     this.avatarView = new AvatarView(() => gameState.setPhase(PHASES.OPENING_VIDEO));
     this.mapView = null;
     this.mainHallView = null;
+    this.adjiePrototypeView = null;
     this.modalsView = null;
     this.transitionCurtain = this._ensureTransitionCurtain();
     this._curtainTimer = null;
@@ -104,6 +105,12 @@ class App {
       this.mainHallView = null;
     }
 
+    // Destroy Stage B Adjie prototype viewer if leaving ADJIE_PROTOTYPE
+    if (phaseChanged && state.gamePhase !== PHASES.ADJIE_PROTOTYPE && this.adjiePrototypeView) {
+      this.adjiePrototypeView.destroy();
+      this.adjiePrototypeView = null;
+    }
+
     if (phaseChanged) {
       this.phaseGeneration += 1;
       const gen = this.phaseGeneration;
@@ -151,6 +158,16 @@ class App {
               this.mainHallView = new MainHallView();
             }
             this.uiLayer.appendChild(this.mainHallView.render());
+          });
+          break;
+
+        case PHASES.ADJIE_PROTOTYPE:
+          import('./views/AdjiePrototypeView.js').then(({ AdjiePrototypeView }) => {
+            if (gen !== this.phaseGeneration || gameState.getState().gamePhase !== PHASES.ADJIE_PROTOTYPE) return;
+            if (!this.adjiePrototypeView) {
+              this.adjiePrototypeView = new AdjiePrototypeView();
+            }
+            this.uiLayer.appendChild(this.adjiePrototypeView.render());
           });
           break;
 

@@ -97,24 +97,44 @@ export const ASSET_MANIFEST = Object.freeze({
   }),
 
   models: Object.freeze({
+    styleDirection: 'STYLE_C_SEMI_REALISTIC_CINEMATIC',
     charactersFolder: 'static/models/characters',
     characters: Object.freeze({
       guest: Object.freeze({
         filename: 'guest.glb',
         url: '/static/models/characters/guest.glb',
-        targetHeightMeters: 2.34
+        targetHeightMeters: 2.34,
+        styleCRealisticHeightMeters: 1.72,
+        canonicalGlbSitHeightMeters: 0.45
       }),
       groom: Object.freeze({
         filename: 'groom.glb',
         url: '/static/models/characters/groom.glb',
-        targetHeightMeters: 2.34
+        targetHeightMeters: 2.34,
+        styleCRealisticHeightMeters: 1.76,
+        canonicalGlbSitHeightMeters: 0.45,
+        identity: 'Adjie Prasatia Sakti',
+        attire: 'beskap_hitam'
       }),
       bride: Object.freeze({
         filename: 'bride.glb',
         url: '/static/models/characters/bride.glb',
-        targetHeightMeters: 2.28
+        targetHeightMeters: 2.28,
+        styleCRealisticHeightMeters: 1.65,
+        canonicalGlbSitHeightMeters: 0.45,
+        identity: 'Daulika Pratiwi',
+        attire: 'kebaya_putih',
+        hijab: false
       })
     }),
+    npcArchetypes: Object.freeze([
+      Object.freeze({ id: 'npc_01', filename: 'guest_male_beskap.glb', roleLabel: 'Keluarga VIP Pria', heightMeters: 1.75 }),
+      Object.freeze({ id: 'npc_02', filename: 'guest_female_hijab_kebaya.glb', roleLabel: 'Keluarga VIP Wanita (Hijab)', heightMeters: 1.63 }),
+      Object.freeze({ id: 'npc_03', filename: 'guest_male_suit.glb', roleLabel: 'Sahabat Pria (Setelan Jas)', heightMeters: 1.77 }),
+      Object.freeze({ id: 'npc_04', filename: 'guest_female_dress.glb', roleLabel: 'Sahabat Wanita (Gaun)', heightMeters: 1.66 }),
+      Object.freeze({ id: 'npc_05', filename: 'guest_male_batik_peci.glb', roleLabel: 'Tamu Pria (Batik & Peci)', heightMeters: 1.73 }),
+      Object.freeze({ id: 'npc_06', filename: 'guest_female_kebaya_bun.glb', roleLabel: 'Tamu Wanita (Kebaya Sanggul)', heightMeters: 1.64 })
+    ]),
     animationClips: Object.freeze({
       idle: ['idle', 'Idle', 'standing_idle'],
       walking: ['walking', 'walk', 'Walk', 'Walking'],

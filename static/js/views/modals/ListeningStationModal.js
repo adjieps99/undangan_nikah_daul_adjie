@@ -93,7 +93,7 @@ export function createListeningStationModal() {
         "></button>
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 11px; color: #aaa;">🔊</span>
-          <input type="range" id="track-volume-slider" aria-label="Volume musik" min="0" max="1" step="0.05" value="0.35" style="
+          <input type="range" id="track-volume-slider" aria-label="Volume musik" min="0" max="1" step="0.05" value="0.22" style="
             width: 70px;
             accent-color: #1ed760;
             cursor: pointer;
@@ -218,7 +218,7 @@ export function createListeningStationModal() {
     });
 
     muteBtn.textContent = ms.isMuted ? '🔇 Audio Dibisukan' : '🔊 Audio Aktif';
-    volumeSlider.value = String(ms.volume ?? 0.35);
+    volumeSlider.value = String(ms.volume ?? 0.22);
 
     if (ms.availability === 'available') {
       playBtn.disabled = false;

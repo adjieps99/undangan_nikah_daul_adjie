@@ -16,19 +16,19 @@ export function shouldPreservePlaybackOnSelect({
   return hasLoadedSource || availability === 'available';
 }
 
-export const DEFAULT_BGM_VOLUME = 0.35;
+export const DEFAULT_BGM_VOLUME = 0.22;
 export const VOICE_BGM_DUCK_RATIO = 0.08;
 
 /**
  * Pure helper computing the target background music volume while the couple's
- * voice greeting is playing (~8% of normal volume, around 0.028 at default 0.35
- * so spoken voices stay crystal clear over a very gentle romantic music bed).
+ * voice greeting is playing (~8% of normal volume, around 0.018 at default 0.22
+ * / ~-35 dB so spoken voices stay crystal clear over a soft music bed on iOS & desktop).
  */
 export function computeDuckedBgmVolume(baseVolume = DEFAULT_BGM_VOLUME, duckRatio = VOICE_BGM_DUCK_RATIO) {
   const safeBase = Number.isFinite(baseVolume) ? Math.max(0, Math.min(1, baseVolume)) : DEFAULT_BGM_VOLUME;
   if (safeBase <= 0) return 0;
   const safeRatio = Number.isFinite(duckRatio) ? Math.max(0, Math.min(1, duckRatio)) : VOICE_BGM_DUCK_RATIO;
-  return Math.max(0.02, Math.min(safeBase, Number((safeBase * safeRatio).toFixed(3))));
+  return Math.max(0.015, Math.min(safeBase, Number((safeBase * safeRatio).toFixed(3))));
 }
 
 /**
@@ -65,6 +65,9 @@ class AudioSystem {
     this.playlist = ASSET_MANIFEST.audio.playlist || [];
     this.availabilityCache = new Map();
     this.bgmAudio = null;
+    this.bgmGain = null;
+    this.bgmSource = null;
+    this._bgmGraphConnected = false;
     this._bgmProbeToken = 0;
     this._hasAttemptedOpeningBgm = false;
     this._awaitingGestureResume = false;
@@ -99,6 +102,7 @@ class AudioSystem {
       // Auto-unlock Web Audio on first user gesture (and retry paused BGM if browser blocked async play)
       const unlockAudio = () => {
         this.init();
+        this._resumeContextIfNeeded();
         if (this._awaitingGestureResume && this.bgmAudio && this.bgmAudio.paused && !this._userPausedMusic) {
           this._awaitingGestureResume = false;
           this.bgmAudio.play().catch(() => {});
@@ -109,6 +113,7 @@ class AudioSystem {
       };
 
       const resumeBlockedBgm = () => {
+        this._resumeContextIfNeeded();
         if (this._awaitingGestureResume && this.bgmAudio && this.bgmAudio.paused && !this._userPausedMusic) {
           this._awaitingGestureResume = false;
           this.bgmAudio.play().catch(() => {
@@ -130,10 +135,66 @@ class AudioSystem {
     }
   }
 
+  _resumeContextIfNeeded() {
+    if (!this.ctx) return;
+    if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+      try {
+        this.ctx.resume().catch(() => {});
+      } catch {}
+    }
+  }
+
+  _getEffectiveBgmGain() {
+    if (this.isMuted) return 0;
+    return this._bgmDuckedByVoice
+      ? computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO)
+      : this.musicState.volume;
+  }
+
+  /**
+   * Routes bgmAudio through a Web Audio GainNode so volume control & smooth
+   * voice ducking work reliably on iOS Safari / iPhone (where HTMLMediaElement.volume
+   * is read-only and locked to 1.0).
+   */
+  _attachBgmGainNode() {
+    if (this._bgmGraphConnected || !this.ctx || !this.bgmAudio) return false;
+    try {
+      const gainNode = this.ctx.createGain();
+      gainNode.gain.setValueAtTime(this._getEffectiveBgmGain(), this.ctx.currentTime);
+      gainNode.connect(this.ctx.destination);
+
+      const sourceNode = this.ctx.createMediaElementSource(this.bgmAudio);
+      sourceNode.connect(gainNode);
+
+      this.bgmGain = gainNode;
+      this.bgmSource = sourceNode;
+      this._bgmGraphConnected = true;
+      // Keep element volume at 1.0 so GainNode is the single volume stage (prevents double-attenuation on Desktop/Android)
+      this.bgmAudio.volume = 1.0;
+      return true;
+    } catch {
+      this._bgmGraphConnected = false;
+      this.bgmGain = null;
+      this.bgmSource = null;
+      if (this.bgmAudio) {
+        this.bgmAudio.volume = this._getEffectiveBgmGain();
+      }
+      return false;
+    }
+  }
+
+  getAudioContext() {
+    this.init();
+    this._resumeContextIfNeeded();
+    return this.ctx;
+  }
+
   _initSharedBgmElement() {
     if (typeof Audio === 'undefined') return;
     const audio = new Audio();
+    audio.crossOrigin = 'anonymous';
     audio.preload = 'metadata';
+    audio.playsInline = true;
     audio.volume = this.musicState.volume;
     audio.muted = this.isMuted;
 
@@ -155,6 +216,10 @@ class AudioSystem {
     });
 
     audio.addEventListener('play', () => {
+      if (this.ctx) {
+        this._attachBgmGainNode();
+        this._resumeContextIfNeeded();
+      }
       this._awaitingGestureResume = false;
       this.musicState.isPlaying = true;
       this.musicState.availability = 'available';
@@ -287,6 +352,7 @@ class AudioSystem {
    */
   async ensureOpeningTrackPlaying() {
     this.init();
+    this._resumeContextIfNeeded();
     if (this._userPausedMusic) return;
     if (this.musicState.isPlaying) {
       this._hasAttemptedOpeningBgm = true;
@@ -438,8 +504,23 @@ class AudioSystem {
   }
 
   _fadeBgmVolumeTo(targetVolume, durationMs = 380) {
-    if (!this.bgmAudio) return;
     const clampedTarget = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+
+    // Primary path (works on iOS Safari / iPhone + Android + Desktop): Web Audio GainNode ramp
+    if (this._bgmGraphConnected && this.bgmGain && this.ctx) {
+      this._resumeContextIfNeeded();
+      try {
+        const now = this.ctx.currentTime;
+        const finalGain = this.isMuted ? 0 : clampedTarget;
+        const durationSec = Math.max(0.02, durationMs / 1000);
+        this.bgmGain.gain.cancelScheduledValues(now);
+        this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, now);
+        this.bgmGain.gain.linearRampToValueAtTime(finalGain, now + durationSec);
+        return;
+      } catch {}
+    }
+
+    if (!this.bgmAudio) return;
     if (this._volumeFadeRaf && typeof cancelAnimationFrame === 'function') {
       cancelAnimationFrame(this._volumeFadeRaf);
       this._volumeFadeRaf = null;
@@ -491,9 +572,17 @@ class AudioSystem {
    * voice greeting plays so their voices remain crisp and clearly audible.
    */
   duckBgmForVoiceGreeting() {
+    this.init();
+    this._attachBgmGainNode();
     this._bgmDuckedByVoice = true;
     const targetBgm = computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO);
-    this._fadeBgmVolumeTo(targetBgm, 350);
+    const isIos = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/i.test(navigator.userAgent || '');
+    if (!this._bgmGraphConnected && isIos) {
+      // Last-resort iOS fallback if Web Audio GainNode could not attach (since HTMLMediaElement.volume is read-only on iOS)
+      this.pauseBgmForVoiceGreeting();
+    } else {
+      this._fadeBgmVolumeTo(targetBgm, 350);
+    }
     this._rampAmbientGain(0.01, 0.35);
     return targetBgm;
   }
@@ -503,10 +592,17 @@ class AudioSystem {
    * the voice greeting is paused, finishes, or the modal closes.
    */
   restoreBgmAfterVoiceGreeting() {
-    if (!this._bgmDuckedByVoice) return false;
+    const wasPausedFallback = this._bgmPausedByVoice;
+    if (!this._bgmDuckedByVoice && !wasPausedFallback) return false;
     this._bgmDuckedByVoice = false;
     this._fadeBgmVolumeTo(this.musicState.volume, 650);
     this._rampAmbientGain(0.16, 0.65);
+    if (wasPausedFallback && this.bgmAudio && this.bgmAudio.paused && !this._userPausedMusic) {
+      this._bgmPausedByVoice = false;
+      this.bgmAudio.play().catch(() => {
+        this._awaitingGestureResume = true;
+      });
+    }
     return true;
   }
 
@@ -591,10 +687,13 @@ class AudioSystem {
   setMusicVolume(volume) {
     const clamped = Math.max(0, Math.min(1, Number(volume)));
     this.musicState.volume = Number.isFinite(clamped) ? clamped : DEFAULT_BGM_VOLUME;
-    if (this.bgmAudio) {
-      this.bgmAudio.volume = this._bgmDuckedByVoice
-        ? computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO)
-        : this.musicState.volume;
+    const targetVol = this._bgmDuckedByVoice
+      ? computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO)
+      : this.musicState.volume;
+    if (this._bgmGraphConnected && this.bgmGain && this.ctx) {
+      this._fadeBgmVolumeTo(targetVol, 40);
+    } else if (this.bgmAudio) {
+      this.bgmAudio.volume = targetVol;
     }
     this._emitMusicUpdate();
   }
@@ -602,13 +701,16 @@ class AudioSystem {
   init() {
     if (this.isInitialized || typeof window === 'undefined') return;
     try {
+      // Allow playback audio even when iPhone physical Silent switch is toggled (iOS 17+)
+      if (typeof navigator !== 'undefined' && navigator.audioSession) {
+        try { navigator.audioSession.type = 'playback'; } catch {}
+      }
+
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
 
       this.ctx = new AudioCtx();
-      if (this.ctx.state === 'suspended') {
-        this.ctx.resume();
-      }
+      this._resumeContextIfNeeded();
 
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : 0.65, this.ctx.currentTime);
@@ -623,6 +725,9 @@ class AudioSystem {
       this.sfxGain = this.ctx.createGain();
       this.sfxGain.gain.setValueAtTime(0.4, this.ctx.currentTime);
       this.sfxGain.connect(this.masterGain);
+
+      // Route shared HTML5 BGM audio through GainNode for cross-platform (iOS Safari!) volume & ducking
+      this._attachBgmGainNode();
 
       this.startAmbientGarden();
       this.isInitialized = true;
@@ -643,6 +748,13 @@ class AudioSystem {
 
     if (this.bgmAudio) {
       this.bgmAudio.muted = this.isMuted;
+    }
+
+    if (this._bgmGraphConnected && this.bgmGain && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.bgmGain.gain.cancelScheduledValues(now);
+      this.bgmGain.gain.setValueAtTime(this.bgmGain.gain.value, now);
+      this.bgmGain.gain.linearRampToValueAtTime(this._getEffectiveBgmGain(), now + 0.08);
     }
 
     if (this.masterGain && this.ctx) {

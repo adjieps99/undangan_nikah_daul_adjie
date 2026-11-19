@@ -19,7 +19,9 @@ export function createVoiceRecordingModal() {
   let isPlaying = false;
   let audioAvailable = false;
   let audioContext = null;
+  let ownsAudioContext = false;
   let analyser = null;
+  let voiceGain = null;
   let mediaSource = null;
   let animationId = null;
   let isDisposed = false;
@@ -28,7 +30,9 @@ export function createVoiceRecordingModal() {
   const listenerOpts = abortCtrl ? { signal: abortCtrl.signal } : undefined;
 
   const audioEl = new Audio();
+  audioEl.crossOrigin = 'anonymous';
   audioEl.preload = 'metadata';
+  audioEl.playsInline = true;
 
   content.innerHTML = `
     <div style="text-align: center; margin-bottom: 14px;">
@@ -186,16 +190,28 @@ export function createVoiceRecordingModal() {
   const ensureAnalyser = () => {
     if (analyser || !audioAvailable) return;
     try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      audioContext = new AudioCtx();
+      // Reuse shared AudioSystem context so iOS Safari never interrupts BGM routing
+      audioContext = typeof audioSystem.getAudioContext === 'function'
+        ? audioSystem.getAudioContext()
+        : null;
+      if (!audioContext) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        audioContext = new AudioCtx();
+        ownsAudioContext = true;
+      }
+      voiceGain = audioContext.createGain();
+      voiceGain.gain.setValueAtTime(parseFloat(volumeSlider.value) || 1, audioContext.currentTime);
       analyser = audioContext.createAnalyser();
       analyser.fftSize = 64;
       mediaSource = audioContext.createMediaElementSource(audioEl);
-      mediaSource.connect(analyser);
+      mediaSource.connect(voiceGain);
+      voiceGain.connect(analyser);
       analyser.connect(audioContext.destination);
+      audioEl.volume = 1.0;
     } catch {
       analyser = null;
+      voiceGain = null;
     }
   };
 
@@ -325,7 +341,12 @@ export function createVoiceRecordingModal() {
   }, listenerOpts);
 
   volumeSlider.addEventListener('input', (e) => {
-    audioEl.volume = parseFloat(e.target.value);
+    const vol = parseFloat(e.target.value);
+    if (voiceGain && audioContext) {
+      voiceGain.gain.setValueAtTime(vol, audioContext.currentTime);
+    } else {
+      audioEl.volume = vol;
+    }
   }, listenerOpts);
 
   const cleanup = () => {
@@ -347,7 +368,10 @@ export function createVoiceRecordingModal() {
       audioEl.removeAttribute('src');
       audioEl.load();
     } catch {}
-    if (audioContext && audioContext.state !== 'closed') {
+    try { if (mediaSource) mediaSource.disconnect(); } catch {}
+    try { if (voiceGain) voiceGain.disconnect(); } catch {}
+    try { if (analyser) analyser.disconnect(); } catch {}
+    if (ownsAudioContext && audioContext && audioContext.state !== 'closed') {
       try { audioContext.close(); } catch {}
     }
     audioSystem.restoreBgmAfterVoiceGreeting();

@@ -335,11 +335,11 @@ test('shouldResumeBgmAfterVoice coordinates Voice Recording <-> BGM resume safel
     false
   );
 
-  // Smooth voice ducking lowers default 0.35 BGM to ~0.028 (~8% / very soft bed) without muting to 0
-  const duckedDefault = computeDuckedBgmVolume(0.35);
-  assert.ok(duckedDefault >= 0.02 && duckedDefault <= 0.04, `Expected ducked BGM ~0.028, got ${duckedDefault}`);
+  // Smooth voice ducking lowers default 0.22 BGM to ~0.018 (~8% / ~-35 dB) without muting to 0
+  const duckedDefault = computeDuckedBgmVolume(0.22);
+  assert.ok(duckedDefault >= 0.015 && duckedDefault <= 0.025, `Expected ducked BGM ~0.018, got ${duckedDefault}`);
   assert.equal(computeDuckedBgmVolume(0), 0);
-  assert.ok(computeDuckedBgmVolume(0.2) <= 0.2 && computeDuckedBgmVolume(0.2) >= 0.02);
+  assert.ok(computeDuckedBgmVolume(0.2) <= 0.2 && computeDuckedBgmVolume(0.2) >= 0.015);
 });
 
 test('GardenClearance keeps pathways, plazas, stairs, and Hachi forecourt clear of bushes while allowing outer slopes', () => {

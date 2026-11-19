@@ -118,7 +118,7 @@ export function createVoiceRecordingModal() {
         <!-- Volume Slider -->
         <div style="display: flex; align-items: center; gap: 6px;">
           <span style="font-size: 12px; color: #aaa;">🔊</span>
-          <input type="range" id="voice-volume-slider" aria-label="Volume pesan suara" min="0" max="1" step="0.05" value="0.85" style="
+          <input type="range" id="voice-volume-slider" aria-label="Volume pesan suara" min="0" max="1" step="0.05" value="1" style="
             width: 65px;
             accent-color: var(--color-gold);
             cursor: pointer;
@@ -218,10 +218,11 @@ export function createVoiceRecordingModal() {
     playBtn.textContent = '▶';
     statusPill.textContent = 'SELESAI DIPUTAR';
     statusPill.style.color = 'var(--color-gold-light)';
-    audioSystem.resumeBgmAfterVoiceGreeting();
+    audioSystem.restoreBgmAfterVoiceGreeting();
   }, listenerOpts);
 
   audioEl.addEventListener('error', () => {
+    audioSystem.restoreBgmAfterVoiceGreeting();
     setUnavailableState();
   }, listenerOpts);
 
@@ -299,8 +300,9 @@ export function createVoiceRecordingModal() {
       playBtn.textContent = '▶';
       statusPill.textContent = 'DIJEDA';
       statusPill.style.color = 'var(--color-gold-light)';
+      audioSystem.restoreBgmAfterVoiceGreeting();
     } else {
-      audioSystem.pauseBgmForVoiceGreeting();
+      audioSystem.duckBgmForVoiceGreeting();
       try {
         await audioEl.play();
         isPlaying = true;
@@ -308,7 +310,7 @@ export function createVoiceRecordingModal() {
         statusPill.textContent = 'MEMUTAR PESAN...';
         statusPill.style.color = '#44ff88';
       } catch {
-        audioSystem.resumeBgmAfterVoiceGreeting();
+        audioSystem.restoreBgmAfterVoiceGreeting();
         setUnavailableState();
       }
     }
@@ -348,7 +350,7 @@ export function createVoiceRecordingModal() {
     if (audioContext && audioContext.state !== 'closed') {
       try { audioContext.close(); } catch {}
     }
-    audioSystem.resumeBgmAfterVoiceGreeting();
+    audioSystem.restoreBgmAfterVoiceGreeting();
   };
 
   activeVoiceModalCleanup = cleanup;

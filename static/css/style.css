@@ -38,6 +38,7 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -703,6 +704,7 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -711,29 +713,35 @@ html, body {
 
 .map-hud-bar {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
-  height: 48px;
-  background: rgba(30, 30, 40, 0.9);
+  top: max(clamp(8px, 1.5dvh, 12px), env(safe-area-inset-top));
+  left: max(clamp(8px, 2vw, 12px), env(safe-area-inset-left));
+  right: max(clamp(8px, 2vw, 12px), env(safe-area-inset-right));
+  min-height: clamp(42px, 6.2dvh, 52px);
+  background: rgba(30, 30, 40, 0.92);
   border: 3px solid var(--color-gold);
   box-shadow: 0 4px 0 #000;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  gap: clamp(6px, 1.8vw, 14px);
+  padding: clamp(4px, 1vw, 6px) clamp(8px, 2.2vw, 16px);
   z-index: 20;
+  overflow: hidden;
 }
 
 .hud-guest-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: clamp(6px, 1.5vw, 8px);
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .hud-avatar-thumb {
-  width: 32px;
-  height: 32px;
+  width: clamp(26px, 6.8vw, 32px);
+  height: clamp(26px, 6.8vw, 32px);
+  flex-shrink: 0;
   border: 2px solid var(--color-gold);
   background: #000;
   border-radius: 4px;
@@ -745,9 +753,13 @@ html, body {
 
 .hud-guest-name {
   font-family: var(--font-serif);
-  font-size: 14px;
+  font-size: clamp(11px, 3vw, 14px);
   font-weight: bold;
   color: var(--color-gold-light);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .desktop-only {
@@ -757,54 +769,85 @@ html, body {
 .hud-title {
   font-size: 10px;
   color: #aaa;
+  flex-shrink: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-actions {
+  display: flex;
+  align-items: center;
+  gap: clamp(4px, 1.4vw, 8px);
+  flex-shrink: 0;
+}
+
+.hud-audio-btn {
+  padding: clamp(4px, 1vw, 6px) clamp(7px, 1.8vw, 10px);
+  font-size: clamp(12px, 3.2vw, 14px);
+  min-width: clamp(32px, 8vw, 38px);
+  min-height: clamp(28px, 6.5vw, 34px);
+  line-height: 1;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #000;
+  flex-shrink: 0;
+}
+
+.hud-avatar-btn {
+  padding: clamp(5px, 1.2vw, 7px) clamp(7px, 2vw, 11px);
+  font-size: clamp(7.5px, 2.1vw, 10px);
+  min-height: clamp(28px, 6.5vw, 34px);
+  line-height: 1.1;
+  gap: 4px;
+  white-space: nowrap;
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #000;
+  flex-shrink: 0;
+}
+
+.hud-audio-btn:hover,
+.hud-avatar-btn:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 #000;
+}
+
+@media (min-width: 681px) {
+  .hud-guest-info {
+    flex: 0 1 auto;
+  }
 }
 
 @media (max-width: 680px) {
   .desktop-only, .hud-title { display: none !important; }
-  .map-hud-bar {
-    top: max(8px, env(safe-area-inset-top));
-    left: 8px;
-    right: 8px;
-    height: 42px;
-    padding: 0 10px;
-  }
-  .hud-guest-name {
-    font-size: 12px;
-    max-width: 140px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .hud-avatar-thumb {
-    width: 26px;
-    height: 26px;
-  }
-  .hud-avatar-btn {
-    font-size: 8px;
-    padding: 3px 8px;
+}
+
+@media (max-width: 350px) {
+  .hud-avatar-btn-extra {
+    display: none;
   }
 }
 
 @media (max-height: 480px) and (orientation: landscape) {
   .map-hud-bar {
     top: 6px;
-    height: 36px;
-    padding: 0 12px;
+    min-height: 36px;
+    padding: 3px 10px;
   }
   .hud-title { display: none; }
   .hud-avatar-thumb { width: 24px; height: 24px; }
   .hud-guest-name { font-size: 11px; }
-  .hud-avatar-btn { font-size: 8px; padding: 2px 6px; }
+  .hud-audio-btn { font-size: 12px; padding: 3px 7px; min-width: 28px; min-height: 26px; }
+  .hud-avatar-btn { font-size: 8px; padding: 3px 7px; min-height: 26px; }
   .virtual-joystick-wrapper {
     bottom: 10px;
   }
   .joystick-touch-area {
-    width: 100px;
-    height: 100px;
+    width: 96px;
+    height: 96px;
   }
   .virtual-joystick-base {
-    width: 80px;
-    height: 80px;
+    width: 76px;
+    height: 76px;
   }
   .virtual-jump-btn {
     width: 44px;
@@ -816,11 +859,6 @@ html, body {
     height: 54px;
     font-size: 16px;
   }
-}
-
-.hud-avatar-btn {
-  font-size: 9px;
-  padding: 4px 10px;
 }
 
 .map-canvas-wrapper {
@@ -883,9 +921,9 @@ html, body {
 /* --- MOBILE VIRTUAL CONTROLS REDESIGN --- */
 .virtual-joystick-wrapper {
   position: absolute;
-  bottom: max(26px, calc(env(safe-area-inset-bottom) + 20px));
-  left: max(20px, env(safe-area-inset-left));
-  right: max(20px, env(safe-area-inset-right));
+  bottom: max(clamp(14px, 3.2dvh, 26px), calc(env(safe-area-inset-bottom) + 12px));
+  left: max(clamp(10px, 3vw, 20px), env(safe-area-inset-left));
+  right: max(clamp(10px, 3vw, 20px), env(safe-area-inset-right));
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -896,8 +934,8 @@ html, body {
 /* Analog Joystick Touch Area & Base */
 .joystick-touch-area {
   position: relative;
-  width: 140px;
-  height: 140px;
+  width: clamp(96px, 27vmin, 138px);
+  height: clamp(96px, 27vmin, 138px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -906,8 +944,8 @@ html, body {
 
 .virtual-joystick-base {
   position: relative;
-  width: 110px;
-  height: 110px;
+  width: clamp(78px, 22vmin, 108px);
+  height: clamp(78px, 22vmin, 108px);
   border-radius: 50%;
   background: radial-gradient(circle, rgba(212, 175, 55, 0.18) 0%, rgba(16, 16, 26, 0.72) 100%);
   border: 2px solid rgba(212, 175, 55, 0.55);
@@ -929,8 +967,8 @@ html, body {
 }
 
 .virtual-joystick-thumb {
-  width: 46px;
-  height: 46px;
+  width: clamp(34px, 9.5vmin, 46px);
+  height: clamp(34px, 9.5vmin, 46px);
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #fff8f0 0%, #e6c8a2 60%, #d4af37 100%);
   border: 2px solid #ffffff;
@@ -943,7 +981,7 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: clamp(8px, 2.2vmin, 14px);
   pointer-events: auto;
 }
 
@@ -961,16 +999,16 @@ html, body {
 }
 
 .virtual-jump-btn {
-  width: 58px;
-  height: 58px;
+  width: clamp(46px, 13vmin, 58px);
+  height: clamp(46px, 13vmin, 58px);
   border-radius: 50%;
   background: rgba(45, 45, 60, 0.75);
   color: #fff;
-  font-size: 16px;
+  font-size: clamp(13px, 3.6vmin, 16px);
 }
 
 .virtual-jump-btn label {
-  font-size: 7px;
+  font-size: clamp(6px, 1.65vmin, 7.5px);
   margin-top: 2px;
   color: var(--color-gold-light);
   cursor: pointer;
@@ -983,32 +1021,20 @@ html, body {
 }
 
 .virtual-action-btn {
-  width: 76px;
-  height: 76px;
+  width: clamp(58px, 16.5vmin, 76px);
+  height: clamp(58px, 16.5vmin, 76px);
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #ffd700 0%, #d4af37 70%, #997a15 100%);
   color: #000;
-  font-size: 22px;
+  font-size: clamp(17px, 4.8vmin, 22px);
   box-shadow: 0 0 16px rgba(212, 175, 55, 0.5), 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .virtual-action-btn label {
-  font-size: 8px;
+  font-size: clamp(6.8px, 1.9vmin, 8.5px);
   font-weight: bold;
   margin-top: 2px;
   color: #000;
-  cursor: pointer;
-}
-
-.virtual-action-btn:active {
-  transform: scale(0.92);
-  background: #ffb703;
-}
-
-.virtual-action-btn label {
-  font-size: 8px;
-  font-weight: bold;
-  margin-top: 2px;
   cursor: pointer;
 }
 
@@ -1066,18 +1092,20 @@ html, body {
   inset: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   background: rgba(12, 9, 16, 0.82);
   z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(12px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom));
 }
 
 .modal-box {
   width: 100%;
   max-width: 460px;
   max-height: 85vh;
+  max-height: 85dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1154,12 +1182,13 @@ svg {
 }
 
 .tutorial-hint-toast {
-  top: 70px;
+  top: max(96px, calc(env(safe-area-inset-top) + 92px));
   background: rgba(24, 24, 34, 0.96);
   border: 2px solid var(--color-gold);
   border-radius: 8px;
-  padding: 12px 20px;
-  min-width: 260px;
+  padding: clamp(10px, 2.5vw, 14px) clamp(12px, 3vw, 20px);
+  width: min(360px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
@@ -1171,7 +1200,7 @@ svg {
 /* In-Game Navigation Compass / Radar Bar */
 .hud-radar-strip {
   position: absolute;
-  top: 66px;
+  top: max(66px, calc(env(safe-area-inset-top) + 60px));
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
@@ -1207,11 +1236,11 @@ svg {
   top: 0;
   left: 0;
   right: 0;
-  padding: 10px 14px;
+  padding: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 10px max(10px, env(safe-area-inset-left));
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: clamp(6px, 1.5vw, 10px);
   background: linear-gradient(to bottom, rgba(16, 12, 20, 0.88) 0%, rgba(16, 12, 20, 0) 100%);
   pointer-events: none;
   z-index: 55;
@@ -1219,27 +1248,27 @@ svg {
 
 .main-hall-brand-card {
   pointer-events: auto;
-  padding: 6px 12px;
+  padding: 6px 10px;
   background: rgba(24, 18, 28, 0.92);
   border: 1px solid var(--color-gold);
   border-radius: 6px;
   min-width: 0;
-  max-width: 64vw;
+  flex: 1 1 auto;
 }
 
 .main-hall-brand-title {
   display: block;
-  font-size: 9px;
+  font-size: clamp(7px, 1.8vw, 9px);
   color: var(--color-gold);
   font-weight: bold;
-  letter-spacing: 1px;
+  letter-spacing: 0.6px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .main-hall-guest-label {
-  font-size: 11px;
+  font-size: clamp(9px, 2.3vw, 11px);
   font-weight: bold;
   color: #fff;
   margin-top: 2px;
@@ -1250,22 +1279,27 @@ svg {
 
 .main-hall-header-actions {
   display: flex;
-  gap: 8px;
+  gap: clamp(4px, 1.2vw, 8px);
   align-items: center;
   flex-shrink: 0;
   pointer-events: auto;
 }
 
-.main-hall-audio-btn {
-  font-size: 13px;
-  padding: 6px 10px;
-  min-width: 36px;
+.main-hall-wish-btn,
+.main-hall-exit-btn {
+  font-size: clamp(7.5px, 2vw, 10px);
+  padding: clamp(5px, 1.2vw, 6px) clamp(7px, 1.8vw, 11px);
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #000;
+  white-space: nowrap;
 }
 
-.main-hall-exit-btn {
-  font-size: 10px;
-  padding: 6px 12px;
-  white-space: nowrap;
+.main-hall-audio-btn {
+  font-size: clamp(11px, 2.8vw, 13px);
+  padding: clamp(4px, 1vw, 6px) clamp(7px, 1.6vw, 10px);
+  min-width: clamp(30px, 7.5vw, 36px);
+  border-width: 2px;
+  box-shadow: 2px 2px 0 #000;
 }
 
 /* Compact Top-Center Status Pill inside Main Reception Hall */
@@ -1321,7 +1355,7 @@ svg {
 
 @media (max-width: 640px) {
   .hud-radar-strip {
-    top: 56px;
+    top: max(60px, calc(env(safe-area-inset-top) + 56px));
     font-size: 10px;
     padding: 4px 10px;
     max-width: 92vw;
@@ -1329,31 +1363,32 @@ svg {
     text-overflow: ellipsis;
   }
   .main-hall-overlay {
-    padding: 8px 10px;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
     gap: 6px;
   }
   .main-hall-brand-card {
     padding: 5px 8px;
-    max-width: 48vw;
+    max-width: 44vw;
   }
   .main-hall-brand-title {
     font-size: 7px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
   }
   .main-hall-guest-label {
     font-size: 9px;
   }
   .main-hall-audio-btn {
-    padding: 5px 8px;
+    padding: 5px 7px;
     font-size: 11px;
-    min-width: 32px;
+    min-width: 30px;
   }
+  .main-hall-wish-btn,
   .main-hall-exit-btn {
-    font-size: 8px;
-    padding: 5px 8px;
+    font-size: 7.5px;
+    padding: 5px 7px;
   }
   .main-hall-status-pill {
-    top: 58px;
+    top: max(60px, calc(env(safe-area-inset-top) + 56px));
     font-size: 10.5px;
     padding: 6px 12px;
     gap: 6px;

@@ -16,6 +16,21 @@ export function shouldPreservePlaybackOnSelect({
   return hasLoadedSource || availability === 'available';
 }
 
+export const DEFAULT_BGM_VOLUME = 0.35;
+export const VOICE_BGM_DUCK_RATIO = 0.08;
+
+/**
+ * Pure helper computing the target background music volume while the couple's
+ * voice greeting is playing (~8% of normal volume, around 0.028 at default 0.35
+ * so spoken voices stay crystal clear over a very gentle romantic music bed).
+ */
+export function computeDuckedBgmVolume(baseVolume = DEFAULT_BGM_VOLUME, duckRatio = VOICE_BGM_DUCK_RATIO) {
+  const safeBase = Number.isFinite(baseVolume) ? Math.max(0, Math.min(1, baseVolume)) : DEFAULT_BGM_VOLUME;
+  if (safeBase <= 0) return 0;
+  const safeRatio = Number.isFinite(duckRatio) ? Math.max(0, Math.min(1, duckRatio)) : VOICE_BGM_DUCK_RATIO;
+  return Math.max(0.02, Math.min(safeBase, Number((safeBase * safeRatio).toFixed(3))));
+}
+
 /**
  * Pure coordination helper for Voice Recording <-> BGM audio handoff.
  * Only resumes BGM automatically if BGM was paused specifically for Voice playback
@@ -55,6 +70,8 @@ class AudioSystem {
     this._awaitingGestureResume = false;
     this._userPausedMusic = false;
     this._bgmPausedByVoice = false;
+    this._bgmDuckedByVoice = false;
+    this._volumeFadeRaf = null;
     this._musicListeners = new Set();
 
     const defaultIdx = Math.max(0, this.playlist.findIndex((t) => t.isDefault));
@@ -67,7 +84,7 @@ class AudioSystem {
       trackAvailability: {},
       currentTime: 0,
       duration: 0,
-      volume: 0.78,
+      volume: DEFAULT_BGM_VOLUME,
       isMuted: false
     };
 
@@ -420,6 +437,79 @@ class AudioSystem {
     this._emitMusicUpdate();
   }
 
+  _fadeBgmVolumeTo(targetVolume, durationMs = 380) {
+    if (!this.bgmAudio) return;
+    const clampedTarget = Math.max(0, Math.min(1, Number(targetVolume) || 0));
+    if (this._volumeFadeRaf && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this._volumeFadeRaf);
+      this._volumeFadeRaf = null;
+    }
+
+    if (typeof requestAnimationFrame !== 'function' || durationMs <= 0) {
+      this.bgmAudio.volume = clampedTarget;
+      return;
+    }
+
+    const startVolume = Number.isFinite(this.bgmAudio.volume) ? this.bgmAudio.volume : clampedTarget;
+    const startTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    const step = (now) => {
+      if (!this.bgmAudio) {
+        this._volumeFadeRaf = null;
+        return;
+      }
+      const elapsed = now - startTime;
+      const t = Math.max(0, Math.min(1, elapsed / durationMs));
+      // Smooth ease-out curve for natural audio ducking/recovery
+      const eased = 1 - Math.pow(1 - t, 2);
+      const nextVol = startVolume + (clampedTarget - startVolume) * eased;
+      this.bgmAudio.volume = Math.max(0, Math.min(1, nextVol));
+
+      if (t < 1) {
+        this._volumeFadeRaf = requestAnimationFrame(step);
+      } else {
+        this.bgmAudio.volume = clampedTarget;
+        this._volumeFadeRaf = null;
+      }
+    };
+
+    this._volumeFadeRaf = requestAnimationFrame(step);
+  }
+
+  _rampAmbientGain(targetGain, durationSec = 0.35) {
+    if (!this.ambientGain || !this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      this.ambientGain.gain.cancelScheduledValues(now);
+      this.ambientGain.gain.setValueAtTime(this.ambientGain.gain.value, now);
+      this.ambientGain.gain.linearRampToValueAtTime(targetGain, now + durationSec);
+    } catch {}
+  }
+
+  /**
+   * Smoothly lowers BGM (~8% of current volume) & garden ambient while the couple's
+   * voice greeting plays so their voices remain crisp and clearly audible.
+   */
+  duckBgmForVoiceGreeting() {
+    this._bgmDuckedByVoice = true;
+    const targetBgm = computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO);
+    this._fadeBgmVolumeTo(targetBgm, 350);
+    this._rampAmbientGain(0.01, 0.35);
+    return targetBgm;
+  }
+
+  /**
+   * Smoothly restores BGM & garden ambient back to normal listening volume when
+   * the voice greeting is paused, finishes, or the modal closes.
+   */
+  restoreBgmAfterVoiceGreeting() {
+    if (!this._bgmDuckedByVoice) return false;
+    this._bgmDuckedByVoice = false;
+    this._fadeBgmVolumeTo(this.musicState.volume, 650);
+    this._rampAmbientGain(0.16, 0.65);
+    return true;
+  }
+
   pauseBgmForVoiceGreeting() {
     if (!this.bgmAudio || this.bgmAudio.paused) return false;
     this._bgmPausedByVoice = true;
@@ -428,6 +518,7 @@ class AudioSystem {
   }
 
   async resumeBgmAfterVoiceGreeting() {
+    this.restoreBgmAfterVoiceGreeting();
     const canResume = shouldResumeBgmAfterVoice({
       pausedByVoice: this._bgmPausedByVoice,
       userPausedMusic: this._userPausedMusic,
@@ -499,9 +590,11 @@ class AudioSystem {
 
   setMusicVolume(volume) {
     const clamped = Math.max(0, Math.min(1, Number(volume)));
-    this.musicState.volume = Number.isFinite(clamped) ? clamped : 0.78;
+    this.musicState.volume = Number.isFinite(clamped) ? clamped : DEFAULT_BGM_VOLUME;
     if (this.bgmAudio) {
-      this.bgmAudio.volume = this.musicState.volume;
+      this.bgmAudio.volume = this._bgmDuckedByVoice
+        ? computeDuckedBgmVolume(this.musicState.volume, VOICE_BGM_DUCK_RATIO)
+        : this.musicState.volume;
     }
     this._emitMusicUpdate();
   }
@@ -523,7 +616,7 @@ class AudioSystem {
 
       // Ambient channel
       this.ambientGain = this.ctx.createGain();
-      this.ambientGain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+      this.ambientGain.gain.setValueAtTime(0.16, this.ctx.currentTime);
       this.ambientGain.connect(this.masterGain);
 
       // SFX channel

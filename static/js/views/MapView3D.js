@@ -46,11 +46,11 @@ export class MapView3D {
         <div class="hud-guest-name"></div>
       </div>
       <div class="hud-title desktop-only">ADJIE &amp; DAULIKA — THE GARDEN OF US</div>
-      <div class="hud-actions" style="display: flex; gap: 6px; align-items: center;">
-        <button class="retro-btn retro-btn-secondary hud-audio-btn" title="Musik & Efek Suara" style="padding: 6px 10px; font-size: 14px; min-width: 38px;">
+      <div class="hud-actions">
+        <button type="button" class="retro-btn retro-btn-secondary hud-audio-btn" title="Musik &amp; Efek Suara" aria-label="Musik dan Efek Suara">
           ${audioSystem.isMuted ? '🔇' : '🔊'}
         </button>
-        <button class="retro-btn retro-btn-secondary hud-avatar-btn">✏️ Edit Avatar</button>
+        <button type="button" class="retro-btn retro-btn-secondary hud-avatar-btn">✏️ <span>Edit<span class="hud-avatar-btn-extra"> Avatar</span></span></button>
       </div>
     `;
 

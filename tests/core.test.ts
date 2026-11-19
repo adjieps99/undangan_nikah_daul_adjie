@@ -43,7 +43,11 @@ import {
 import { TerrainManager } from '../static/js/world/TerrainManager.js';
 import { WEDDING_DATA } from '../static/js/data/wedding.js';
 import { ASSET_MANIFEST, getTrackFilename } from '../static/js/config/assetManifest.js';
-import { shouldPreservePlaybackOnSelect, shouldResumeBgmAfterVoice } from '../static/js/game/AudioSystem.js';
+import {
+  shouldPreservePlaybackOnSelect,
+  shouldResumeBgmAfterVoice,
+  computeDuckedBgmVolume
+} from '../static/js/game/AudioSystem.js';
 import { isVegetationSpotClear, PATHWAY_LANTERN_COORDS } from '../static/js/world/GardenClearance.js';
 import {
   OUTDOOR_EXIT_SPAWN,
@@ -330,6 +334,12 @@ test('shouldResumeBgmAfterVoice coordinates Voice Recording <-> BGM resume safel
     shouldResumeBgmAfterVoice({ pausedByVoice: true, userPausedMusic: false, bgmCurrentlyPaused: false }),
     false
   );
+
+  // Smooth voice ducking lowers default 0.35 BGM to ~0.028 (~8% / very soft bed) without muting to 0
+  const duckedDefault = computeDuckedBgmVolume(0.35);
+  assert.ok(duckedDefault >= 0.02 && duckedDefault <= 0.04, `Expected ducked BGM ~0.028, got ${duckedDefault}`);
+  assert.equal(computeDuckedBgmVolume(0), 0);
+  assert.ok(computeDuckedBgmVolume(0.2) <= 0.2 && computeDuckedBgmVolume(0.2) >= 0.02);
 });
 
 test('GardenClearance keeps pathways, plazas, stairs, and Hachi forecourt clear of bushes while allowing outer slopes', () => {

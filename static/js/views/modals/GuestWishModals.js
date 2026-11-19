@@ -165,7 +165,25 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
 }
 
 /**
- * Opens the "Baca Pesan Teman" lazy-loaded rotating wish card modal triggered near NPCs or Pelaminan.
+ * Formats an ISO timestamp into a compact Indonesian date label (e.g. "19 Nov 2026").
+ */
+function formatWishDate(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Opens the "Baca Pesan Teman" lazy-loaded vertical scrollable wish wall triggered near NPCs or Pelaminan.
  */
 export function openReadWishesModal({ onOpenSendWish = null, onCloseComplete = null } = {}) {
   closeExistingWishModals();
@@ -173,135 +191,141 @@ export function openReadWishesModal({ onOpenSendWish = null, onCloseComplete = n
   const content = document.createElement('div');
   content.className = 'read-wishes-modal-content';
   content.innerHTML = `
-    <div id="wish-reader-stage" class="wish-read-card">
-      <div class="wish-card-eyebrow">With Love</div>
-      <div class="wish-card-body" style="color: #cfc8b8;">Memuat pesan teman-teman...</div>
-      <div></div>
+    <div class="wish-feed-header" id="wish-feed-header">
+      <span class="wish-feed-count" id="wish-feed-count">💌 Memuat pesan teman-teman...</span>
+      <span class="wish-feed-scroll-hint" id="wish-feed-scroll-hint" style="display: none;">Geser ke bawah ↓</span>
     </div>
-    <div class="wish-card-nav" id="wish-reader-nav" style="display: none;">
-      <button type="button" class="retro-btn retro-btn-secondary" id="wish-prev-btn" style="padding: 8px 14px; font-size: 11px;">◀ Sebelumnya</button>
-      <span id="wish-card-counter" style="font-size: 12px; color: #f5e6a3;">1 / 1</span>
-      <button type="button" class="retro-btn retro-btn-secondary" id="wish-next-btn" style="padding: 8px 14px; font-size: 11px;">Berikutnya ▶</button>
+    <div id="wish-feed-list" class="wish-feed-list" role="region" aria-label="Daftar pesan dan doa tamu">
+      <div class="wish-feed-empty">
+        <div class="wish-card-eyebrow">With Love</div>
+        <p class="wish-feed-empty-text">Memuat doa dan ucapan hangat...</p>
+      </div>
     </div>
+    <div id="wish-feed-footer" class="wish-feed-footer" style="display: none;"></div>
   `;
 
-  const stageEl = content.querySelector('#wish-reader-stage');
-  const navEl = content.querySelector('#wish-reader-nav');
-  const prevBtn = content.querySelector('#wish-prev-btn');
-  const nextBtn = content.querySelector('#wish-next-btn');
-  const counterEl = content.querySelector('#wish-card-counter');
+  const countEl = content.querySelector('#wish-feed-count');
+  const scrollHintEl = content.querySelector('#wish-feed-scroll-hint');
+  const listEl = content.querySelector('#wish-feed-list');
+  const footerEl = content.querySelector('#wish-feed-footer');
 
-  let wishes = [];
-  let currentIndex = 0;
+  const renderFeed = (wishes) => {
+    listEl.innerHTML = '';
+    footerEl.innerHTML = '';
 
-  const renderCard = () => {
-    stageEl.innerHTML = '';
+    if (!wishes.length) {
+      countEl.textContent = '💌 0 Pesan & Doa';
+      scrollHintEl.style.display = 'none';
+      footerEl.style.display = 'none';
 
-    const eyebrow = document.createElement('div');
-    eyebrow.className = 'wish-card-eyebrow';
-    eyebrow.textContent = 'With Love';
-    stageEl.appendChild(eyebrow);
+      const emptyWrap = document.createElement('div');
+      emptyWrap.className = 'wish-feed-empty';
 
-    if (wishes.length === 0) {
-      const emptyText = document.createElement('div');
-      emptyText.className = 'wish-card-body';
-      emptyText.style.fontStyle = 'normal';
+      const eyebrow = document.createElement('div');
+      eyebrow.className = 'wish-card-eyebrow';
+      eyebrow.textContent = 'With Love';
+
+      const emptyText = document.createElement('p');
+      emptyText.className = 'wish-feed-empty-text';
       emptyText.textContent = 'Belum ada pesan publik saat ini. Yuk jadi yang pertama menitipkan doa untuk Adjie & Daulika!';
-      stageEl.appendChild(emptyText);
+
+      emptyWrap.appendChild(eyebrow);
+      emptyWrap.appendChild(emptyText);
 
       if (typeof onOpenSendWish === 'function') {
         const sendCta = createRetroButton({
-          text: 'Kirim Doa Sekarang',
+          text: '✍️ Kirim Doa Sekarang',
           onClick: () => {
             backdrop._cleanup();
             onOpenSendWish();
           }
         });
-        sendCta.style.fontSize = '11px';
-        sendCta.style.margin = '0 auto';
-        stageEl.appendChild(sendCta);
-      } else {
-        stageEl.appendChild(document.createElement('div'));
+        sendCta.classList.add('wish-feed-cta-btn');
+        emptyWrap.appendChild(sendCta);
       }
-      navEl.style.display = 'none';
+
+      listEl.appendChild(emptyWrap);
       return;
     }
 
-    const item = wishes[currentIndex];
-    const bodyEl = document.createElement('div');
-    bodyEl.className = 'wish-card-body';
-    bodyEl.textContent = `“${String(item.message || '')}”`;
+    countEl.textContent = `💌 ${wishes.length} Pesan & Doa`;
+    scrollHintEl.style.display = wishes.length > 2 ? 'inline-block' : 'none';
 
-    const fromEl = document.createElement('div');
-    fromEl.className = 'wish-card-from';
-    fromEl.textContent = `From: ${String(item.name || 'Tamu Undangan')}`;
+    const frag = document.createDocumentFragment();
+    wishes.forEach((item) => {
+      const card = document.createElement('article');
+      card.className = 'wish-feed-card';
 
-    stageEl.appendChild(bodyEl);
-    stageEl.appendChild(fromEl);
+      const topRow = document.createElement('div');
+      topRow.className = 'wish-feed-card-top';
 
-    counterEl.textContent = `${currentIndex + 1} / ${wishes.length}`;
-    navEl.style.display = wishes.length > 1 ? 'flex' : 'none';
-  };
+      const eyebrow = document.createElement('span');
+      eyebrow.className = 'wish-card-eyebrow';
+      eyebrow.textContent = '✦ With Love';
+      topRow.appendChild(eyebrow);
 
-  const stepCard = (delta) => {
-    if (wishes.length <= 1) return;
-    currentIndex = (currentIndex + delta + wishes.length) % wishes.length;
-    renderCard();
-  };
+      const dateStr = formatWishDate(item.timestamp);
+      if (dateStr) {
+        const dateEl = document.createElement('span');
+        dateEl.className = 'wish-feed-date';
+        dateEl.textContent = dateStr;
+        topRow.appendChild(dateEl);
+      }
 
-  prevBtn.addEventListener('click', () => stepCard(-1));
-  nextBtn.addEventListener('click', () => stepCard(1));
+      const bodyEl = document.createElement('p');
+      bodyEl.className = 'wish-feed-message';
+      bodyEl.textContent = `“${String(item.message || '')}”`;
 
-  let touchStartX = null;
-  stageEl.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) touchStartX = e.touches[0].clientX;
-  }, { passive: true });
-  stageEl.addEventListener('touchend', (e) => {
-    if (touchStartX === null || !e.changedTouches.length) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    touchStartX = null;
-    if (Math.abs(dx) > 40) {
-      stepCard(dx < 0 ? 1 : -1);
+      const senderEl = document.createElement('div');
+      senderEl.className = 'wish-feed-sender';
+      senderEl.textContent = `— ${String(item.name || 'Tamu Undangan')}`;
+
+      card.appendChild(topRow);
+      card.appendChild(bodyEl);
+      card.appendChild(senderEl);
+      frag.appendChild(card);
+    });
+
+    listEl.appendChild(frag);
+    listEl.scrollTop = 0;
+
+    if (typeof onOpenSendWish === 'function') {
+      const writeBtn = createRetroButton({
+        text: '✍️ Titip Doa & Pesanmu',
+        onClick: () => {
+          backdrop._cleanup();
+          onOpenSendWish();
+        }
+      });
+      writeBtn.classList.add('wish-feed-cta-btn');
+      footerEl.appendChild(writeBtn);
+      footerEl.style.display = 'flex';
+    } else {
+      footerEl.style.display = 'none';
     }
-  }, { passive: true });
-
-  const onKeyNav = (e) => {
-    if (e.key === 'ArrowLeft') stepCard(-1);
-    if (e.key === 'ArrowRight') stepCard(1);
   };
-  window.addEventListener('keydown', onKeyNav);
 
   const backdrop = createModal({
     id: 'hall-read-wishes-modal',
     title: 'PESAN & DOA TEMAN-TEMAN',
     content,
     onClose: () => {
-      window.removeEventListener('keydown', onKeyNav);
       backdrop.remove();
       if (typeof onCloseComplete === 'function') onCloseComplete();
     }
   });
   backdrop.dataset.wishOverlay = '1';
 
-  const originalCleanup = backdrop._cleanup;
-  backdrop._cleanup = () => {
-    window.removeEventListener('keydown', onKeyNav);
-    originalCleanup();
-  };
-
   const host = document.getElementById('ui-layer') || document.body;
   host.appendChild(backdrop);
 
-  // Lazy-fetch strictly on modal open from Firestore
-  fetchPublicWishesFromFirestore({ limitCount: 50, randomize: true })
+  // Lazy-fetch strictly on modal open from Firestore (newest first for natural vertical scroll)
+  fetchPublicWishesFromFirestore({ limitCount: 60, randomize: false })
     .then((items) => {
-      wishes = Array.isArray(items) ? items : [];
-      currentIndex = 0;
-      renderCard();
+      renderFeed(Array.isArray(items) ? items : []);
     })
     .catch(() => {
-      wishes = [];
-      renderCard();
+      renderFeed([]);
     });
 
   return backdrop;

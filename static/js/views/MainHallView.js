@@ -8,6 +8,11 @@ import { Avatar3D } from '../characters/Avatar3D.js';
 import { CHARACTER_ANIM_STATES } from '../characters/CharacterAnimator.js';
 import { computeSeatingRigPose } from '../characters/SeatingAnchor.js';
 import {
+  openSendWishModal,
+  openReadWishesModal,
+  closeExistingWishModals
+} from './modals/GuestWishModals.js';
+import {
   OUTDOOR_EXIT_SPAWN,
   MAIN_HALL_INTRO_CONFIG,
   clampMainHallCameraPosition,
@@ -39,6 +44,8 @@ export class MainHallView {
     this.isSitting = false;
     this.currentSeat = null;
     this.nearbySeat = null;
+    this.nearbyNpcSeat = null;
+    this.isNearCouple = false;
     this.isNearExit = false;
     this.allSeats = [];
 
@@ -61,7 +68,9 @@ export class MainHallView {
     this.statusPillEl = null;
     this.statusTextEl = null;
     this.sitButton = null;
+    this.secondaryBtn = null;
     this._lastHudKey = '';
+    this._entranceToastTimer = null;
     this._windowCleanups = [];
 
     this.handleInteractBound = () => this.handleAction();
@@ -126,19 +135,44 @@ export class MainHallView {
       this.exitToGarden();
     });
 
-    // 3. Single Compact Top-Center Contextual Status Pill (leaves bottom mobile controls 100% clear)
+    // 3. Compact Top-Center Contextual Status Pill (supports couple dual-CTA + NPC wish reader + seating)
     this.statusPillEl = document.createElement('div');
     this.statusPillEl.className = 'main-hall-status-pill';
     this.statusPillEl.innerHTML = `
-      <span id="hall-status-text">Dekati kursi kosong untuk duduk santai.</span>
-      <button type="button" id="hall-contextual-btn" class="retro-btn" style="padding: 5px 10px; font-size: 9px; display: none;"></button>
+      <span id="hall-status-text">Dekati pengantin untuk kirim doa, tamu duduk untuk baca pesan, atau kursi kosong.</span>
+      <span class="main-hall-status-actions">
+        <button type="button" id="hall-contextual-btn" class="retro-btn" style="padding: 5px 10px; font-size: 9px; display: none;"></button>
+        <button type="button" id="hall-secondary-btn" class="retro-btn retro-btn-secondary" style="padding: 5px 10px; font-size: 9px; display: none;"></button>
+      </span>
     `;
     this.statusTextEl = this.statusPillEl.querySelector('#hall-status-text');
     this.sitButton = this.statusPillEl.querySelector('#hall-contextual-btn');
+    this.secondaryBtn = this.statusPillEl.querySelector('#hall-secondary-btn');
     this.sitButton.addEventListener('click', () => this.handleAction());
+    this.secondaryBtn.addEventListener('click', () => {
+      if (this.isNearCouple) {
+        openReadWishesModal({
+          onOpenSendWish: () => openSendWishModal()
+        });
+      }
+    });
 
     this.container.appendChild(overlay);
     this.container.appendChild(this.statusPillEl);
+
+    // One-Person Venue Entrance Notice (shown once on confirmed RSVP entrance)
+    if (state.hallEntranceNotice) {
+      gameState.setState({ hallEntranceNotice: false });
+      const noticeToast = document.createElement('div');
+      noticeToast.className = 'hall-entrance-toast';
+      noticeToast.id = 'hall-entrance-toast';
+      noticeToast.textContent = 'Selamat datang! Undangan ini berlaku untuk 1 orang. Kehadiran Anda sudah kami catat.';
+      this.container.appendChild(noticeToast);
+      this._entranceToastTimer = setTimeout(() => {
+        noticeToast.style.opacity = '0';
+        setTimeout(() => noticeToast.remove(), 400);
+      }, 5200);
+    }
 
     // 4. Controls: Virtual Joystick for Mobile & Keyboard WASD
     this.controls = new Controls();
@@ -285,10 +319,17 @@ export class MainHallView {
   }
 
   handleAction() {
+    if (document.querySelector('.modal-backdrop')) return;
     if (this.isSitting) {
       this.standUp();
     } else if (this.isNearExit) {
       this.exitToGarden();
+    } else if (this.isNearCouple) {
+      openSendWishModal();
+    } else if (this.nearbyNpcSeat) {
+      openReadWishesModal({
+        onOpenSendWish: () => openSendWishModal()
+      });
     } else if (this.nearbySeat) {
       this.sitAtSeat(this.nearbySeat);
     }
@@ -326,20 +367,36 @@ export class MainHallView {
     if (key === this._lastHudKey || !this.statusTextEl || !this.sitButton) return;
     this._lastHudKey = key;
 
+    if (this.secondaryBtn) {
+      this.secondaryBtn.style.display = 'none';
+    }
+
     if (this.isSitting && this.currentSeat) {
       this.statusTextEl.textContent = `Duduk di ${this.currentSeat.label}`;
       this.sitButton.textContent = 'Berdiri kembali';
       this.sitButton.style.display = 'inline-flex';
     } else if (this.isNearExit) {
       this.statusTextEl.textContent = 'Pintu keluar menuju The Hachi Garden';
-      this.sitButton.textContent = '🌿 Keluar ke taman';
+      this.sitButton.textContent = 'Keluar ke taman';
+      this.sitButton.style.display = 'inline-flex';
+    } else if (this.isNearCouple) {
+      this.statusTextEl.textContent = 'Terima kasih sudah hadir di hari bahagia kami! Jangan lupa tinggalkan doa dan pesan untuk kami, ya.';
+      this.sitButton.textContent = 'Kirim Doa';
+      this.sitButton.style.display = 'inline-flex';
+      if (this.secondaryBtn) {
+        this.secondaryBtn.textContent = 'Baca Pesan Teman';
+        this.secondaryBtn.style.display = 'inline-flex';
+      }
+    } else if (this.nearbyNpcSeat) {
+      this.statusTextEl.textContent = 'Ada pesan manis dari teman-teman untuk Adjie & Daulika. Mau membacanya?';
+      this.sitButton.textContent = 'Baca Pesan';
       this.sitButton.style.display = 'inline-flex';
     } else if (this.nearbySeat) {
       this.statusTextEl.textContent = `Kursi ${this.nearbySeat.id} (${this.nearbySeat.label})`;
       this.sitButton.textContent = 'Yuk, duduk sebentar';
       this.sitButton.style.display = 'inline-flex';
     } else {
-      this.statusTextEl.textContent = 'Dekati kursi kosong untuk duduk santai.';
+      this.statusTextEl.textContent = 'Dekati pengantin untuk kirim doa, tamu duduk untuk baca pesan, atau kursi kosong.';
       this.sitButton.style.display = 'none';
     }
   }
@@ -504,19 +561,22 @@ export class MainHallView {
       const delta = Math.max(0.001, Math.min(0.05, rawDelta || 0.016));
       const dtScale = Math.min(3.0, Math.max(0.2, delta * 60));
 
-      // 1. Process Player Movement (Camera-Relative)
+      // 1. Process Player Movement (paused while any wish/info modal is open)
+      const hasOpenModal = Boolean(document.querySelector('.modal-backdrop'));
       if (this.character && this.controls) {
-        if (this.isSitting) {
-          const { dx, dy, jump } = this.controls.getMovementVector();
-          if (Math.abs(dx) > 0.08 || Math.abs(dy) > 0.08 || jump) {
-            this.standUp();
+        if (!hasOpenModal) {
+          if (this.isSitting) {
+            const { dx, dy, jump } = this.controls.getMovementVector();
+            if (Math.abs(dx) > 0.08 || Math.abs(dy) > 0.08 || jump) {
+              this.standUp();
+            }
+          } else {
+            const { dx, dy, intensity, jump } = this.controls.getMovementVector();
+            if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05 || jump) {
+              this.introCamera = null;
+            }
+            this.character.move(dx, dy, intensity, jump, this.camera);
           }
-        } else {
-          const { dx, dy, intensity, jump } = this.controls.getMovementVector();
-          if (Math.abs(dx) > 0.05 || Math.abs(dy) > 0.05 || jump) {
-            this.introCamera = null;
-          }
-          this.character.move(dx, dy, intensity, jump, this.camera);
         }
         this.character.update(delta);
       }
@@ -612,19 +672,50 @@ export class MainHallView {
     if (!this.character) return;
     const charPos = this.character.getPosition();
 
-    // Check Exit Door proximity (South double doors at x: 0, z: 9.0)
+    // 1. Exit Door proximity (South double doors at x: 0, z: 9.0)
     const distToDoor = Math.hypot(charPos.x - 0.0, charPos.z - 9.0);
     if (distToDoor < 2.5) {
       this.isNearExit = true;
+      this.isNearCouple = false;
+      this.nearbyNpcSeat = null;
       this.nearbySeat = null;
       this._syncHudPill(this.isSitting ? `sit:${this.currentSeat?.id || ''}` : 'exit');
       return;
     }
     this.isNearExit = false;
 
+    // 2. Pelaminan Couple proximity (Adjie & Daulika at z = -14.15, riser edge z = -12.4)
+    if (!this.isSitting && Math.abs(charPos.x) <= 3.6 && charPos.z <= -9.75) {
+      this.isNearCouple = true;
+      this.nearbyNpcSeat = null;
+      this.nearbySeat = null;
+      this._syncHudPill('couple');
+      return;
+    }
+    this.isNearCouple = false;
+
+    // 3. Seated NPC Guest proximity -> Read Guest Wishes
+    let closestNpc = null;
+    let minNpcDist = 1.95;
+    for (const seat of this.allSeats) {
+      if (!seat.isOccupiedByNPC) continue;
+      const d = Math.hypot(charPos.x - seat.x, charPos.z - seat.z);
+      if (d < minNpcDist) {
+        minNpcDist = d;
+        closestNpc = seat;
+      }
+    }
+    if (!this.isSitting && closestNpc) {
+      this.nearbyNpcSeat = closestNpc;
+      this.nearbySeat = null;
+      this._syncHudPill(`npc:${closestNpc.id}`);
+      return;
+    }
+    this.nearbyNpcSeat = null;
+
+    // 4. Vacant Seat proximity -> Sit interaction
     let closestSeat = null;
     let minDist = 1.7;
-
     for (const seat of this.allSeats) {
       if (seat.isOccupiedByNPC) continue;
       const d = Math.hypot(charPos.x - seat.x, charPos.z - seat.z);
@@ -1110,6 +1201,11 @@ export class MainHallView {
 
   destroy() {
     this._isDestroyed = true;
+    closeExistingWishModals();
+    if (this._entranceToastTimer) {
+      clearTimeout(this._entranceToastTimer);
+      this._entranceToastTimer = null;
+    }
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;

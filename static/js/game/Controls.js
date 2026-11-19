@@ -20,7 +20,16 @@ export class Controls {
   }
 
   setupKeyboardListeners() {
+    const isTypingTarget = (el) => {
+      if (!el || !el.tagName) return false;
+      const tag = el.tagName.toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    };
+
     this._onKeyDown = (e) => {
+      if (isTypingTarget(document.activeElement) || document.querySelector('.modal-backdrop')) {
+        return;
+      }
       switch (e.key.toLowerCase()) {
         case 'w':
         case 'arrowup':
@@ -40,6 +49,9 @@ export class Controls {
           break;
         case 'e':
           this.keys.interact = true;
+          if (!e.repeat) {
+            this.triggerInteract();
+          }
           break;
         case ' ':
           this.keys.jump = true;

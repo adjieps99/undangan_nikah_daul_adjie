@@ -55,61 +55,59 @@ import {
   isPointInsideHachiBuilding
 } from '../static/js/three/CameraFraming.js';
 
-test('rsvpContract separates invitation_category (A/B) from optional guest_group (Keluarga/Teman)', () => {
-  assert.equal(getMaxGuestQuota(INVITATION_CATEGORIES.A), 2);
+test('rsvpContract enforces strict 1-person invitation policy across all RSVP payloads', () => {
+  assert.equal(getMaxGuestQuota(INVITATION_CATEGORIES.A), 1);
   assert.equal(getMaxGuestQuota(INVITATION_CATEGORIES.B), 1);
   assert.equal(normalizeInvitationCategory('b'), 'B');
-  assert.equal(normalizeInvitationCategory('invalid'), 'A');
+  assert.equal(normalizeInvitationCategory('invalid'), 'B');
 
-  const validCatA = validateRsvpPayload({
+  const validAttending = validateRsvpPayload({
     guest_name: 'Raka Pratama',
+    attending: 1,
+    guest_count: 1,
+    invitation_category: 'A'
+  });
+  assert.equal(validAttending.valid, true);
+  if (validAttending.valid) {
+    assert.equal(validAttending.normalized.invitation_category, 'A');
+    assert.equal(validAttending.normalized.guest_count, 1);
+    assert.equal(validAttending.normalized.guest_group, null);
+  }
+
+  const validDeclined = validateRsvpPayload({
+    guest_name: 'Sinta Dewi',
+    attending: 0,
+    guest_count: 0,
+    guest_group: GUEST_GROUPS.TEMAN
+  });
+  assert.equal(validDeclined.valid, true);
+  if (validDeclined.valid) {
+    assert.equal(validDeclined.normalized.guest_count, 0);
+    assert.equal(validDeclined.normalized.guest_group, 'Teman');
+  }
+
+  // Attempting 2 or more guests must strictly fail with 422
+  const overQuotaTwo = validateRsvpPayload({
+    guest_name: 'Sinta Dewi',
     attending: 1,
     guest_count: 2,
     invitation_category: 'A'
   });
-  assert.equal(validCatA.valid, true);
-  if (validCatA.valid) {
-    assert.equal(validCatA.normalized.invitation_category, 'A');
-    assert.equal(validCatA.normalized.guest_count, 2);
-    assert.equal(validCatA.normalized.guest_group, null);
+  assert.equal(overQuotaTwo.valid, false);
+  if (!overQuotaTwo.valid) {
+    assert.equal(overQuotaTwo.status, 422);
+    assert.match(overQuotaTwo.message, /1 orang/i);
   }
 
-  const validCatB = validateRsvpPayload({
-    guest_name: 'Sinta Dewi',
-    attending: 1,
-    guest_count: 1,
-    invitation_category: 'B',
-    guest_group: GUEST_GROUPS.TEMAN
-  });
-  assert.equal(validCatB.valid, true);
-  if (validCatB.valid) {
-    assert.equal(validCatB.normalized.invitation_category, 'B');
-    assert.equal(validCatB.normalized.guest_count, 1);
-    assert.equal(validCatB.normalized.guest_group, 'Teman');
-  }
-
-  // Category B attempting 2 guests must fail with 422
-  const overQuotaB = validateRsvpPayload({
-    guest_name: 'Sinta Dewi',
-    attending: 1,
-    guest_count: 2,
-    invitation_category: 'B'
-  });
-  assert.equal(overQuotaB.valid, false);
-  if (!overQuotaB.valid) {
-    assert.equal(overQuotaB.status, 422);
-  }
-
-  // Category A attempting 3 guests must fail with 422
-  const overQuotaA = validateRsvpPayload({
+  const overQuotaThree = validateRsvpPayload({
     guest_name: 'Budi Santoso',
     attending: 1,
     guest_count: 3,
-    invitation_category: 'A'
+    invitation_category: 'B'
   });
-  assert.equal(overQuotaA.valid, false);
-  if (!overQuotaA.valid) {
-    assert.equal(overQuotaA.status, 422);
+  assert.equal(overQuotaThree.valid, false);
+  if (!overQuotaThree.valid) {
+    assert.equal(overQuotaThree.status, 422);
   }
 });
 
@@ -118,13 +116,13 @@ test('rsvpContract isolates storage keys per guest identity and strips control c
   assert.equal(clean, 'Budi Santoso');
 
   const keyGuest1 = buildGuestStorageKey('Budi Santoso', 'A');
-  const keyGuest2 = buildGuestStorageKey('Budi Santoso', 'B');
-  const keyGuest3 = buildGuestStorageKey('Sinta Dewi', 'B');
-  const keyInviteCode = buildGuestStorageKey('Sinta Dewi', 'B', 'VIP-04');
+  const keyGuest2 = buildGuestStorageKey('Sinta Dewi', 'B');
+  const keyInviteToken1 = buildGuestStorageKey('Sinta Dewi', 'B', 'token-alpha');
+  const keyInviteToken2 = buildGuestStorageKey('Sinta Dewi', 'B', 'token-beta');
 
   assert.notEqual(keyGuest1, keyGuest2);
-  assert.notEqual(keyGuest2, keyGuest3);
-  assert.notEqual(keyGuest3, keyInviteCode);
+  assert.notEqual(keyGuest2, keyInviteToken1);
+  assert.notEqual(keyInviteToken1, keyInviteToken2);
 });
 
 test('SeatingAnchor places sitting hips flush on chair cushion and soles flush on floor without 40cm floating', () => {
@@ -506,3 +504,50 @@ test('StylizedMathV3 enforces ~7.18-heads natural human proportions, SeatingAnch
   assert.ok(Math.abs(right.y - left.y) < 1e-6);
   assert.ok(Math.abs(right.z - left.z) < 1e-6);
 });
+
+import fs from 'fs';
+import path from 'path';
+import {
+  parseGuestListText,
+  buildPersonalInviteUrl,
+  escapeCsvCell
+} from '../server/guestListParser.js';
+
+test('guestListParser loads all 153 authoritative entries verbatim without splitting or deduplicating', () => {
+  const seedPath = path.resolve(process.cwd(), 'server/seed/list_undangan.txt');
+  const raw = fs.readFileSync(seedPath, 'utf8');
+  const parsed = parseGuestListText(raw);
+
+  assert.equal(parsed.length, 153);
+  assert.equal(parsed[0].no, 1);
+  assert.equal(parsed[0].name, 'Adjie');
+
+  assert.equal(parsed[21].no, 22);
+  assert.equal(parsed[21].name, 'Kel. Ua Ria 1');
+
+  assert.equal(parsed[61].no, 62);
+  assert.equal(parsed[61].name, 'Pakde Mahsun & Bude Indrawati');
+
+  assert.equal(parsed[152].no, 153);
+  assert.equal(parsed[152].name, 'pak muji presiden Serikat Pekerja SERA');
+});
+
+test('buildPersonalInviteUrl and escapeCsvCell produce safe ?to= links and CSV values', () => {
+  assert.equal(
+    buildPersonalInviteUrl('https://adjie-daulika.example.com/', 'Fawwaz Nabiel'),
+    'https://adjie-daulika.example.com/?to=Fawwaz%20Nabiel'
+  );
+  assert.equal(
+    buildPersonalInviteUrl('https://adjie-daulika.example.com', 'Pakde Mahsun & Bude Indrawati'),
+    'https://adjie-daulika.example.com/?to=Pakde%20Mahsun%20%26%20Bude%20Indrawati'
+  );
+  assert.equal(
+    buildPersonalInviteUrl('https://adjie-daulika.example.com', '   '),
+    'https://adjie-daulika.example.com/'
+  );
+
+  assert.equal(escapeCsvCell('Budi, Santoso'), '"Budi, Santoso"');
+  assert.equal(escapeCsvCell('=HYPERLINK("http://evil")'), `"'=HYPERLINK(""http://evil"")"`);
+  assert.equal(escapeCsvCell('Normal Name'), 'Normal Name');
+});
+

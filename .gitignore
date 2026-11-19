@@ -3,3 +3,12 @@ undangan/
 venv/ 
 __pycache__/ 
 .env
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/wedding_store.json
+data/wedding_store.json.tmp
+instance/*.db
+instance/*.db-wal
+instance/*.db-shm
+

@@ -1,91 +1,51 @@
-# Run Adjie & Daulika locally (Windows + Anaconda)
+# Run Adjie & Daulika Wedding App Locally
 
-This project is a Node.js/Express application. The Anaconda environment is used as the terminal environment; Node.js and npm must be available inside that terminal.
+This application is a Node.js 22+ (Express + TypeScript + Vanilla ES6 / Three.js) project with zero native database dependencies, ready for local development and Cloud Run (`PORT=8080`).
 
-## 1. Open Anaconda Prompt
+## 1. Prerequisites
 
-```bat
-conda activate undangan
-node --version
-npm --version
+- **Node.js v22+** (supports running `node server.ts` directly)
+- **npm**
+
+## 2. Environment Configuration
+
+Copy `.env.example` to `.env` if you want to override defaults:
+
+```bash
+cp .env.example .env
 ```
 
-If either version command is not recognized, install Node.js LTS and reopen Anaconda Prompt. Do not install Python packages for this project.
+Key environment variables (all optional with safe defaults):
+- `PORT` (default `3000`, Cloud Run sets `8080`)
+- `STORE_PATH` (default `./data/wedding_store.json`, falls back gracefully to in-memory if disk is read-only)
+- `ADMIN_ACCESS_KEY` (default `adjie-daulika-2026`)
+- `ADMIN_SESSION_SECRET` (optional HMAC signing key for `/admin` Bearer tokens)
+- `PUBLIC_BASE_URL` (optional canonical base URL for generated `/?to=...` links)
 
-## 2. Extract the project ZIP
+## 3. Install & Start
 
-Extract `undangan_nikah_daul_adjie-head-refinement.zip` to a normal writable folder, for example:
-
-```text
-D:\Projects\undangan_nikah_daul_adjie
-```
-
-Then enter the extracted project directory (the folder that contains `package.json`):
-
-```bat
-cd /d D:\Projects\undangan_nikah_daul_adjie
-```
-
-## 3. Install project dependencies
-
-Run once after extraction, or again whenever `package.json` changes:
-
-```bat
+```bash
 npm install
-```
-
-The app loads Three.js in the browser through the import map in `index.html`. The `three` npm dependency is also included so the automated Node.js tests can import the same geometry code.
-
-## 4. Start the local server
-
-```bat
 npm run dev
 ```
 
-Wait until the terminal reports that the server is listening on port `3000`. Keep this terminal open while using the site.
+Or run the production entry point directly:
 
-Open the live wedding hall:
-
-```text
-http://localhost:3000/?phase=hall&debug=1
+```bash
+PORT=8080 npm start
 ```
 
-Open the character inspection studio (V3):
+## 4. Key URLs
 
-```text
-http://localhost:3000/?phase=adjie_prototype&debug=1&avatar=v3&angle=closeup&gender=female&hairStyle=hijab&outfit=kebaya_putih&accessory=none
-```
+- Main invitation cover: `http://localhost:3000/`
+- Personalized guest invitation: `http://localhost:3000/?to=Nama%20Tamu`
+- Admin Link Generator, 153-Guest List & Wishes Moderation: `http://localhost:3000/admin`
+- Direct Main Hall inspection: `http://localhost:3000/?phase=hall&debug=1`
 
-Useful inspection variants:
+## 5. Verification Commands
 
-```text
-http://localhost:3000/?phase=adjie_prototype&debug=1&avatar=v3&angle=closeup&gender=male&hairStyle=short&outfit=beskap_hitam&accessory=none
-http://localhost:3000/?phase=adjie_prototype&debug=1&avatar=v3&angle=closeup&gender=female&hairStyle=long&outfit=kebaya_putih&accessory=none
-http://localhost:3000/?phase=adjie_prototype&debug=1&avatar=v3&angle=closeup&gender=female&hairStyle=wavy&outfit=dress&accessory=none
-```
-
-## 5. Run checks
-
-In a second Anaconda Prompt, activate the same environment and enter the project folder:
-
-```bat
-conda activate undangan
-cd /d D:\Projects\undangan_nikah_daul_adjie
+```bash
 npm test
 npm run lint
 npm run build
 ```
-
-`npm test` runs the core regression tests. `npm run lint` runs TypeScript checking without emitting files. `npm run build` runs the project's configured TypeScript build check.
-
-## 6. Stop the server
-
-Return to the terminal running `npm run dev` and press `Ctrl + C`.
-
-## Notes
-
-- The live Main Hall player, groom, bride, and seated guest avatars now explicitly use procedural V3.
-- The prototype page still supports V1/V2/V3 comparisons through its model controls.
-- Body geometry below the neck, movement, sitting alignment, wedding environment, invitation content, and existing UI were not redesigned in this head-refinement update.
-- The audio directory is intentionally left as supplied in the compact source archive. Add your audio files back into `static/audio/tracks/` when ready.
-- Do not copy `node_modules` into the ZIP. `npm install` recreates it locally.

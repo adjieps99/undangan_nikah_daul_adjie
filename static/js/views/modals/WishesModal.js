@@ -3,38 +3,69 @@ import { createRetroButton } from '../../ui/RetroButton.js';
 import { gameState } from '../../state/GameState.js';
 
 export function createWishesModal() {
+  const state = gameState.getState();
   const content = document.createElement('div');
   content.className = 'wishes-modal-content';
 
   const wishesListContainer = document.createElement('div');
   wishesListContainer.className = 'wishes-stream-container';
-  wishesListContainer.innerHTML = `<div class="loading-text">Memuat doa & ucapan...</div>`;
+  wishesListContainer.innerHTML = `<div class="loading-text">Memuat doa &amp; ucapan...</div>`;
 
-  // Fetch mock wishes + load local submissions
   loadWishes(wishesListContainer);
 
-  // Form Submission
+  let visibility = 'PUBLIC';
+
   const formBox = document.createElement('form');
   formBox.className = 'wish-form-box';
   formBox.innerHTML = `
-    <h4 style="font-size: 11px; color: var(--color-gold-light); margin-bottom: 8px;">KIRIM UCAPAN & DOA</h4>
-    <textarea id="wish-input" class="retro-textarea" rows="3" placeholder="Tuliskan ucapan & doa restu Anda di sini..." required></textarea>
+    <h4 style="font-size: 11px; color: var(--color-gold-light); margin-bottom: 8px;">KIRIM UCAPAN &amp; DOA</h4>
+    <textarea id="wish-input" class="wish-textarea" rows="3" maxlength="500" placeholder="Tuliskan ucapan &amp; doa restu Anda di sini..." required></textarea>
+    <div id="wish-modal-counter" class="wish-char-counter">0 / 500</div>
+    <div class="wish-vis-row" style="margin: 8px 0 10px;">
+      <button type="button" class="wish-vis-pill active" id="wish-modal-vis-public">Public</button>
+      <button type="button" class="wish-vis-pill" id="wish-modal-vis-private">Khusus Pengantin (Private)</button>
+    </div>
   `;
 
+  const wishInput = formBox.querySelector('#wish-input');
+  const counterEl = formBox.querySelector('#wish-modal-counter');
+  const pubBtn = formBox.querySelector('#wish-modal-vis-public');
+  const privBtn = formBox.querySelector('#wish-modal-vis-private');
+
+  wishInput.addEventListener('input', () => {
+    counterEl.textContent = `${wishInput.value.length} / 500`;
+  });
+
+  pubBtn.addEventListener('click', () => {
+    visibility = 'PUBLIC';
+    pubBtn.classList.add('active');
+    privBtn.classList.remove('active');
+  });
+  privBtn.addEventListener('click', () => {
+    visibility = 'PRIVATE';
+    privBtn.classList.add('active');
+    pubBtn.classList.remove('active');
+  });
+
+  const feedbackBanner = document.createElement('div');
+  feedbackBanner.style.cssText = 'display: none; margin: 8px 0; font-size: 12px; text-align: center; padding: 8px 10px; border-radius: 6px;';
+
   const submitBtn = createRetroButton({
-    text: '💌 KIRIM UCAPAN',
+    text: 'Kirim Doa',
     onClick: async (e) => {
       e.preventDefault();
-      const rawText = formBox.querySelector('#wish-input').value.trim();
+      const rawText = wishInput.value.trim();
       const text = rawText.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').slice(0, 500).trim();
       if (!text) return;
 
       submitBtn.disabled = true;
-      submitBtn.innerText = '⏳ MENGIRIM...';
+      submitBtn.innerText = 'Mengirim...';
 
+      const currentState = gameState.getState();
       const payload = {
-        sender_name: gameState.getState().guestName,
-        message: text
+        sender_name: currentState.guestName || state.guestName || 'Tamu Undangan',
+        message: text,
+        visibility
       };
 
       try {
@@ -47,35 +78,44 @@ export function createWishesModal() {
         const resData = await response.json();
 
         if (response.ok && resData.status === 'ok') {
-          saveLocalWish(resData.wish);
-          formBox.querySelector('#wish-input').value = '';
-          errorBanner.style.display = 'none';
+          wishInput.value = '';
+          counterEl.textContent = '0 / 500';
+          feedbackBanner.style.display = 'block';
+          feedbackBanner.style.background = 'rgba(60, 190, 100, 0.16)';
+          feedbackBanner.style.border = '1px solid #5ee085';
+          feedbackBanner.style.color = '#cbffda';
+          feedbackBanner.textContent = 'Terima kasih sudah menitipkan doa dan pesan untuk kami. ❤️';
           loadWishes(wishesListContainer);
         } else {
-          errorBanner.textContent = `Gagal mengirim ucapan: ${resData.message || 'Terjadi kesalahan.'}`;
-          errorBanner.style.display = 'block';
+          feedbackBanner.style.display = 'block';
+          feedbackBanner.style.background = 'rgba(255, 70, 70, 0.16)';
+          feedbackBanner.style.border = '1px solid #ff6666';
+          feedbackBanner.style.color = '#ffb3b3';
+          feedbackBanner.textContent = `Gagal mengirim ucapan: ${resData.message || 'Terjadi kesalahan.'}`;
         }
-      } catch (err) {
-        errorBanner.textContent = 'Koneksi terputus saat mengirim ucapan. Silakan coba lagi.';
-        errorBanner.style.display = 'block';
+      } catch {
+        feedbackBanner.style.display = 'block';
+        feedbackBanner.style.background = 'rgba(255, 70, 70, 0.16)';
+        feedbackBanner.style.border = '1px solid #ff6666';
+        feedbackBanner.style.color = '#ffb3b3';
+        feedbackBanner.textContent = 'Koneksi terputus saat mengirim ucapan. Silakan coba lagi.';
       } finally {
         submitBtn.disabled = false;
-        submitBtn.innerText = '💌 KIRIM UCAPAN';
+        submitBtn.innerText = 'Kirim Doa';
       }
     }
   });
+  submitBtn.style.width = '100%';
 
-  const errorBanner = document.createElement('div');
-  errorBanner.style.cssText = 'display: none; margin-top: 8px; font-size: 11px; color: #ff8888; text-align: center;';
-  formBox.appendChild(errorBanner);
+  formBox.appendChild(feedbackBanner);
   formBox.appendChild(submitBtn);
   content.appendChild(wishesListContainer);
   content.appendChild(formBox);
 
   return createModal({
     id: 'wishes-modal',
-    title: '🌸 BUKU TAMU & DOA RESTU',
-    content: content
+    title: 'BUKU TAMU & DOA RESTU',
+    content
   });
 }
 
@@ -85,31 +125,19 @@ async function loadWishes(container) {
     const res = await fetch('/api/wishes?page=1&limit=25');
     if (res.ok) {
       const data = await res.json();
-      if (Array.isArray(data.wishes) && data.wishes.length > 0) {
+      if (Array.isArray(data.wishes)) {
         wishes = data.wishes;
       }
     }
   } catch (e) {
-    console.warn('API wishes offline, fallback to cache');
-  }
-
-  // Graceful fallback to local cache + seed if server empty
-  if (wishes.length === 0) {
-    const localWishes = getLocalWishes();
-    try {
-      const seedRes = await fetch('/static/data/wishes.json');
-      const seedWishes = await seedRes.json();
-      wishes = [...localWishes, ...seedWishes];
-    } catch (e) {
-      wishes = localWishes;
-    }
+    console.warn('API wishes unavailable:', e);
   }
 
   container.innerHTML = '';
   if (wishes.length === 0) {
     const emptyMsg = document.createElement('p');
-    emptyMsg.style.cssText = 'font-size: 10px; color: #888;';
-    emptyMsg.textContent = 'Belum ada ucapan. Jadilah yang pertama!';
+    emptyMsg.style.cssText = 'font-size: 12px; color: #b5b0a4; text-align: center; padding: 10px 0;';
+    emptyMsg.textContent = 'Belum ada ucapan publik yang ditampilkan. Jadilah yang pertama menitipkan doa!';
     container.appendChild(emptyMsg);
     return;
   }
@@ -123,11 +151,15 @@ async function loadWishes(container) {
 
     const author = document.createElement('strong');
     author.className = 'wish-author';
-    author.textContent = String(item.name || 'Anonim');
+    author.textContent = String(item.name || 'Tamu Undangan');
 
     const time = document.createElement('span');
     time.className = 'wish-time';
-    time.textContent = String(item.timestamp || '');
+    try {
+      time.textContent = item.timestamp ? new Date(item.timestamp).toLocaleDateString('id-ID') : '';
+    } catch {
+      time.textContent = '';
+    }
 
     header.appendChild(author);
     header.appendChild(time);
@@ -139,24 +171,5 @@ async function loadWishes(container) {
     card.appendChild(header);
     card.appendChild(msg);
     container.appendChild(card);
-  }
-}
-
-function getLocalWishes() {
-  try {
-    const saved = localStorage.getItem('wedding_wishes');
-    return saved ? JSON.parse(saved) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveLocalWish(wish) {
-  const wishes = getLocalWishes();
-  wishes.unshift(wish);
-  try {
-    localStorage.setItem('wedding_wishes', JSON.stringify(wishes));
-  } catch (e) {
-    console.warn('LocalStorage unavailable');
   }
 }

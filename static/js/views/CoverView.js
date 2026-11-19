@@ -26,12 +26,37 @@ export class CoverView {
     viewContainer.appendChild(sparkles);
 
     // Single Romantic Welcoming Heading
+    const isPersonalized = Boolean(state.isPersonalizedInvite && state.guestName);
     const headerTitle = document.createElement('div');
-    headerTitle.className = 'cover-header-badge';
+    headerTitle.className = `cover-header-badge${isPersonalized ? ' is-personalized' : ''}`;
     headerTitle.innerHTML = `
       <h1 class="cover-welcome-heading">Selamat datang di hari bahagia Adjie &amp; Daulika</h1>
     `;
     viewContainer.appendChild(headerTitle);
+
+    if (isPersonalized) {
+      const plaque = document.createElement('div');
+      plaque.className = 'cover-recipient-plaque';
+      plaque.id = 'cover-recipient-plaque';
+
+      const toLabel = document.createElement('div');
+      toLabel.className = 'cover-recipient-label';
+      toLabel.textContent = 'Kepada Yth.';
+
+      const guestEl = document.createElement('div');
+      guestEl.className = 'cover-recipient-name';
+      guestEl.id = 'cover-recipient-name';
+      guestEl.textContent = state.guestName;
+
+      const capEl = document.createElement('div');
+      capEl.className = 'cover-recipient-capacity';
+      capEl.textContent = 'Undangan ini berlaku untuk 1 orang';
+
+      plaque.appendChild(toLabel);
+      plaque.appendChild(guestEl);
+      plaque.appendChild(capEl);
+      viewContainer.appendChild(plaque);
+    }
 
     // Single Interactive Envelope Component
     const envelopeWrapper = document.createElement('div');
@@ -69,7 +94,7 @@ export class CoverView {
       </button>
     `;
 
-    // Safe textContent assignment to prevent XSS from ?to= URL parameter
+    // Safe textContent assignment to prevent XSS from ?to= or token parameter
     const recipientEl = envelopeBox.querySelector('.letter-guest-recipient');
     if (recipientEl) {
       recipientEl.textContent = state.guestName || 'Tamu Undangan';

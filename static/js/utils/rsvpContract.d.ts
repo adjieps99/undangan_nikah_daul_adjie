@@ -3,6 +3,8 @@ export declare const INVITATION_CATEGORIES: Readonly<{
   B: 'B';
 }>;
 
+export declare const STRICT_ONE_PERSON_CAPACITY: 1;
+
 export declare const GUEST_GROUPS: Readonly<{
   KELUARGA: 'Keluarga';
   TEMAN: 'Teman';
@@ -11,7 +13,7 @@ export declare const GUEST_GROUPS: Readonly<{
 export declare function sanitizeGuestText(raw: unknown, maxLength?: number): string;
 export declare function normalizeInvitationCategory(raw: unknown): 'A' | 'B';
 export declare function normalizeGuestGroup(raw: unknown): 'Keluarga' | 'Teman' | null;
-export declare function getMaxGuestQuota(invitationCategory: unknown): 1 | 2;
+export declare function getMaxGuestQuota(invitationCategory?: unknown): 1;
 export declare function buildGuestStorageKey(
   guestName?: string,
   invitationCategory?: string,
@@ -21,7 +23,7 @@ export declare function buildGuestStorageKey(
 export interface NormalizedRsvpPayload {
   guest_name: string;
   attending: 0 | 1;
-  guest_count: number;
+  guest_count: 0 | 1;
   invitation_category: 'A' | 'B';
   guest_group: 'Keluarga' | 'Teman' | null;
   invitation_identity: string | null;

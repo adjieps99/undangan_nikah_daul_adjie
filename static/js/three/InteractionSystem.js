@@ -71,9 +71,10 @@ export class InteractionSystem {
     if (this.nearbyPOI.id === 'rsvp') {
       const rsvpData = gameState.getState().rsvpData;
       if (rsvpData && rsvpData.attending === true) {
-        // Guest already RSVP'd! Enter Main Reception Hall cleanly
+        // Guest already RSVP'd! Enter Main Reception Hall cleanly with 1-person entrance toast
         gameState.setState({
           lastOutdoorPosition: { ...OUTDOOR_EXIT_SPAWN },
+          hallEntranceNotice: true,
           gamePhase: PHASES.MAIN_HALL
         });
         return;

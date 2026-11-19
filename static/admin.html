@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Undangan &amp; Moderasi — Adjie &amp; Daulika</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #111018;
+      --surface: #1b1925;
+      --surface-2: #242131;
+      --border: #363147;
+      --gold: #d4af37;
+      --gold-light: #f5e6a3;
+      --text: #f4f2ec;
+      --muted: #a6a2b5;
+      --green: #38b86c;
+      --red: #e05a5a;
+      --amber: #e2a93b;
+      --blue: #5fa8ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    .admin-shell {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+    }
+
+    .login-wrap {
+      min-height: 82vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1.5px solid var(--gold);
+      border-radius: 12px;
+      padding: 28px 24px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    }
+
+    .brand-eyebrow {
+      font-family: 'Cinzel', Georgia, serif;
+      font-size: 12px;
+      letter-spacing: 2px;
+      color: var(--gold);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    h1, h2 {
+      font-family: 'Cinzel', Georgia, serif;
+      margin: 0 0 8px;
+      color: var(--gold-light);
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gold-light);
+      margin-bottom: 6px;
+    }
+
+    .input, .select {
+      width: 100%;
+      padding: 10px 12px;
+      background: #121119;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .input:focus, .select:focus {
+      border-color: var(--gold);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.15s ease, transform 0.1s ease;
+    }
+
+    .btn:hover { opacity: 0.92; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-gold { background: var(--gold); color: #121008; }
+    .btn-secondary { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+    .btn-green { background: rgba(56, 184, 108, 0.2); color: #8af0b4; border-color: rgba(56, 184, 108, 0.5); }
+    .btn-red { background: rgba(224, 90, 90, 0.2); color: #ffb2b2; border-color: rgba(224, 90, 90, 0.5); }
+    .btn-sm { padding: 6px 10px; font-size: 12px; }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 20px;
+    }
+
+    .tabs-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: 10px 18px;
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: rgba(212, 175, 55, 0.16);
+      color: var(--gold-light);
+      border-color: var(--gold);
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--gold-light);
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 16px;
+      background: var(--surface);
+      padding: 14px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+
+    .toolbar-grow { flex: 1 1 240px; }
+
+    .table-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 820px;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: var(--gold-light);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-pending { background: rgba(226, 169, 59, 0.16); color: #ffd982; border: 1px solid rgba(226, 169, 59, 0.4); }
+    .badge-attend { background: rgba(56, 184, 108, 0.16); color: #8af0b4; border: 1px solid rgba(56, 184, 108, 0.4); }
+    .badge-declined { background: rgba(224, 90, 90, 0.16); color: #ffb2b2; border: 1px solid rgba(224, 90, 90, 0.4); }
+    .badge-review { background: rgba(95, 168, 255, 0.16); color: #aad4ff; border: 1px solid rgba(95, 168, 255, 0.4); }
+    .badge-public { background: rgba(56, 184, 108, 0.14); color: #a8f5c7; border: 1px solid rgba(56, 184, 108, 0.35); }
+    .badge-private { background: rgba(186, 120, 255, 0.16); color: #e2c2ff; border: 1px solid rgba(186, 120, 255, 0.4); }
+
+    .link-box {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11.5px;
+      color: #d6d0e4;
+      background: #121119;
+      border: 1px solid var(--border);
+      padding: 5px 8px;
+      border-radius: 6px;
+      word-break: break-all;
+      max-width: 310px;
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .toast-banner {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 90;
+      background: #1c3124;
+      border: 1px solid #59c987;
+      color: #e2ffed;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 7, 12, 0.78);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 80;
+      padding: 16px;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 440px;
+      background: var(--surface);
+      border: 1.5px solid var(--gold);
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .quick-card {
+      background: linear-gradient(135deg, rgba(212, 175, 55, 0.1), rgba(27, 25, 37, 0.96));
+      border: 1.5px solid rgba(212, 175, 55, 0.55);
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 20px;
+    }
+
+    .quick-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .quick-preview-url {
+      flex: 1 1 320px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12.5px;
+      color: var(--gold-light);
+      background: #121119;
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      border-radius: 8px;
+      word-break: break-all;
+    }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="admin-shell">
+    <!-- Login Screen -->
+    <section id="admin-login-section" class="login-wrap">
+      <div class="login-card">
+        <div class="brand-eyebrow">Adjie &amp; Daulika</div>
+        <h1>Portal Administrator</h1>
+        <p class="muted" style="margin-bottom: 18px;">
+          Masuk untuk membuat &amp; membagikan link undangan personal (<code>?to=Nama+Tamu</code>), melihat daftar 153 tamu, dan moderasi ucapan.
+        </p>
+        <form id="admin-login-form">
+          <label class="field-label" for="admin-access-key">Kode Akses Administrator</label>
+          <input id="admin-access-key" class="input" type="password" autocomplete="current-password" placeholder="Masukkan kode akses..." required />
+          <div id="admin-login-error" class="muted hidden" style="color: #ff9c9c; margin-top: 8px;"></div>
+          <button id="admin-login-btn" type="submit" class="btn btn-gold" style="width: 100%; margin-top: 14px;">
+            Masuk ke Dashboard
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Main Admin Dashboard -->
+    <section id="admin-dashboard-section" class="hidden">
+      <header class="topbar">
+        <div>
+          <div class="brand-eyebrow">Adjie &amp; Daulika — The Hachi Garden</div>
+          <h1 style="font-size: 22px; margin: 0;">Link Undangan &amp; Moderasi Ucapan</h1>
+        </div>
+        <div class="actions-row">
+          <a href="/" class="btn btn-secondary">Lihat Undangan Utama</a>
+          <button id="admin-logout-btn" type="button" class="btn btn-secondary">Keluar</button>
+        </div>
+      </header>
+
+      <nav class="tabs-bar">
+        <button id="tab-invitations" type="button" class="tab-btn active">Link Undangan (153 Tamu)</button>
+        <button id="tab-wishes" type="button" class="tab-btn">Moderasi Ucapan &amp; Doa</button>
+      </nav>
+
+      <!-- TAB 1: LINK UNDANGAN & DAFTAR TAMU -->
+      <div id="panel-invitations">
+        <!-- Quick Link Generator -->
+        <section class="quick-card" aria-label="Buat Link Undangan Cepat">
+          <div class="brand-eyebrow" style="margin-bottom: 4px;">Buat Link Cepat</div>
+          <h2 style="font-size: 16px; margin-bottom: 6px;">Kirim Undangan ke Siapa Saja</h2>
+          <p class="muted" style="margin: 0 0 12px;">
+            Ketik nama tamu di bawah ini untuk langsung membuat link personal (berlaku untuk 1 orang), lalu salin atau kirim langsung via WhatsApp.
+          </p>
+          <div class="quick-row">
+            <input
+              id="quick-guest-name"
+              class="input toolbar-grow"
+              type="text"
+              maxlength="100"
+              aria-label="Nama tamu untuk link cepat"
+              placeholder="Contoh: Budi Santoso atau Pakde Mahsun & Bude Indrawati"
+            />
+          </div>
+          <div class="quick-row">
+            <div id="quick-link-preview" class="quick-preview-url"></div>
+            <button id="quick-copy-btn" type="button" class="btn btn-gold">Copy Link</button>
+            <a id="quick-wa-btn" class="btn btn-green" href="#" target="_blank" rel="noopener noreferrer">Kirim WhatsApp</a>
+            <a id="quick-preview-btn" class="btn btn-secondary" href="/" target="_blank" rel="noopener noreferrer">Preview</a>
+          </div>
+        </section>
+
+        <div id="inv-stats-grid" class="stats-grid"></div>
+
+        <div class="toolbar">
+          <input id="inv-search" class="input toolbar-grow" type="search" aria-label="Cari nomor atau nama tamu" placeholder="Cari nomor atau nama tamu..." />
+          <select id="inv-status-filter" class="select" aria-label="Filter status RSVP" style="width: auto; min-width: 190px;">
+            <option value="ALL">Semua Status</option>
+            <option value="PENDING">Belum merespons</option>
+            <option value="WILL_ATTEND">Akan hadir</option>
+            <option value="DECLINED">Tidak dapat hadir</option>
+          </select>
+          <button id="inv-export-btn" type="button" class="btn btn-gold">Export CSV</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 56px;">No</th>
+                <th style="min-width: 220px;">Nama Tamu</th>
+                <th style="min-width: 310px;">Link Undangan Personal</th>
+                <th style="min-width: 170px;">RSVP Status</th>
+                <th style="min-width: 220px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="inv-table-body">
+              <tr><td colspan="5" class="muted">Memuat daftar undangan...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 2: MODERASI UCAPAN & DOA -->
+      <div id="panel-wishes" class="hidden">
+        <div id="wish-stats-grid" class="stats-grid"></div>
+
+        <div class="toolbar">
+          <input id="wish-search" class="input toolbar-grow" type="search" aria-label="Cari ucapan tamu" placeholder="Cari nama pengirim atau isi ucapan..." />
+          <select id="wish-status-filter" class="select" aria-label="Filter moderasi ucapan" style="width: auto; min-width: 170px;">
+            <option value="ALL">Semua Moderasi</option>
+            <option value="PENDING">Menunggu (Pending)</option>
+            <option value="APPROVED">Disetujui (Approved)</option>
+            <option value="REJECTED">Ditolak (Rejected)</option>
+          </select>
+          <select id="wish-vis-filter" class="select" aria-label="Filter privasi ucapan" style="width: auto; min-width: 170px;">
+            <option value="ALL">Semua Privasi</option>
+            <option value="PUBLIC">Public</option>
+            <option value="PRIVATE">Private (Pengantin)</option>
+          </select>
+          <button id="wish-refresh-btn" type="button" class="btn btn-secondary">Muat Ulang</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style="min-width: 150px;">Pengirim</th>
+                <th style="min-width: 300px;">Pesan &amp; Doa</th>
+                <th style="min-width: 130px;">Privasi</th>
+                <th style="min-width: 130px;">Status</th>
+                <th style="min-width: 150px;">Tanggal</th>
+                <th style="min-width: 170px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="wish-table-body">
+              <tr><td colspan="6" class="muted">Memuat ucapan &amp; doa...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Edit Guest Name Modal -->
+  <div id="edit-guest-modal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <h2 style="font-size: 18px; margin-bottom: 8px;">Edit Nama Tamu</h2>
+      <p id="edit-guest-original" class="muted" style="margin-bottom: 12px;"></p>
+      <form id="edit-guest-form">
+        <input id="edit-guest-no" type="hidden" />
+        <label class="field-label" for="edit-guest-name-input">Nama Tamu pada Undangan</label>
+        <input id="edit-guest-name-input" class="input" type="text" maxlength="100" required />
+        <div class="actions-row" style="justify-content: flex-end; margin-top: 16px;">
+          <button id="edit-guest-cancel" type="button" class="btn btn-secondary">Batal</button>
+          <button type="submit" class="btn btn-gold">Simpan Perubahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="admin-toast" class="toast-banner hidden"></div>
+  <script type="module" src="/static/js/admin.js"></script>
+</body>
+</html>

@@ -1,12 +1,12 @@
 import {
   buildGuestStorageKey,
-  getMaxGuestQuota,
   normalizeInvitationCategory,
   sanitizeGuestText
 } from '../utils/rsvpContract.js';
 
 /**
  * GameState - Central Observable State Manager
+ * Simple ?to=Nama Tamu personalization + strict 1-person RSVP state
  */
 export const PHASES = {
   COVER: 'COVER',
@@ -34,8 +34,9 @@ export const MODALS = {
 class GameState {
   constructor() {
     this.listeners = new Set();
+    const isPersonalizedInvite = this.hasExplicitToParam();
     const guestName = this.getGuestNameFromURL();
-    const guestCategory = this.getGuestCategoryFromURL();
+    const guestCategory = 'B';
     const inviteCode = this.getInviteCodeFromURL();
     const storageKey = buildGuestStorageKey(guestName, guestCategory, inviteCode);
 
@@ -44,35 +45,40 @@ class GameState {
       guestName,
       guestCategory,
       inviteCode,
+      isPersonalizedInvite,
+      guestCapacity: 1,
       rsvpStorageKey: storageKey,
       playerConfig: {
-        gender: 'male', // 'male' | 'female'
+        gender: 'male',
         skinColor: '#F1C27D',
-        hairStyle: 'short', // 'short' | 'long' | 'wavy' | 'bun' | 'hijab' | 'cap'
+        hairStyle: 'short',
         hairColor: '#2C1B18',
-        outfit: 'traditional_gold', // 'traditional_gold' | 'traditional_maroon' | 'tuxedo' | 'beskap_hitam' | 'dress' | 'kebaya_putih'
-        accessory: 'none', // 'none' | 'glasses' | 'flower' | 'crown'
-        expression: 'happy' // 'happy' | 'wink' | 'smile'
+        outfit: 'traditional_gold',
+        accessory: 'none',
+        expression: 'happy'
       },
       playerPosition: { x: 400, y: 300, direction: 'down', isMoving: false },
       activeModal: this.getInitialModalFromURL(),
       rsvpData: this.loadRSVP(guestName, guestCategory, storageKey),
-      audioState: { isBgmPlaying: false, isMuted: false }
+      audioState: { isBgmPlaying: false, isMuted: false },
+      hallEntranceNotice: false
     };
   }
 
-  getGuestCategoryFromURL() {
+  hasExplicitToParam() {
+    if (typeof window === 'undefined') return false;
     const params = new URLSearchParams(window.location.search);
-    const cat = params.get('cat') || params.get('category') || params.get('group') || 'A';
-    return normalizeInvitationCategory(cat);
+    return Boolean(sanitizeGuestText(params.get('to') || '', 80));
   }
 
   getInviteCodeFromURL() {
+    if (typeof window === 'undefined') return '';
     const params = new URLSearchParams(window.location.search);
-    return sanitizeGuestText(params.get('invite') || params.get('code') || '', 32);
+    return sanitizeGuestText(params.get('code') || '', 64);
   }
 
   getInitialModalFromURL() {
+    if (typeof window === 'undefined') return MODALS.NONE;
     const params = new URLSearchParams(window.location.search);
     const m = params.get('modal');
     if (m && Object.values(MODALS).includes(m)) return m;
@@ -83,6 +89,7 @@ class GameState {
   }
 
   getInitialPhaseFromURL() {
+    if (typeof window === 'undefined') return PHASES.COVER;
     const params = new URLSearchParams(window.location.search);
     if (params.get('autostart') === '1') {
       return PHASES.EXPLORATION;
@@ -103,55 +110,60 @@ class GameState {
   }
 
   getGuestNameFromURL() {
+    if (typeof window === 'undefined') return 'Tamu Undangan';
     const params = new URLSearchParams(window.location.search);
-    const sanitized = sanitizeGuestText(params.get('to') || '', 60);
+    const sanitized = sanitizeGuestText(params.get('to') || '', 80);
     return sanitized || 'Tamu Undangan';
   }
 
   loadRSVP(guestName, guestCategory, storageKey) {
-    const maxQuota = getMaxGuestQuota(guestCategory);
-    const fallback = { attending: null, guestCount: 1, table: null, seat: null };
+    const fallback = {
+      attending: null,
+      rsvp_status: 'PENDING',
+      guestCount: 0,
+      guestCapacity: 1,
+      table: null,
+      seat: null
+    };
     try {
       const saved = localStorage.getItem(storageKey);
       if (!saved) return fallback;
       const parsed = JSON.parse(saved);
       if (!parsed || typeof parsed !== 'object') return fallback;
 
-      // Guard against cross-guest leakage even on similar slugs
-      const savedName = sanitizeGuestText(parsed.guestName || '', 60).toLowerCase();
-      const expectedName = sanitizeGuestText(guestName, 60).toLowerCase();
+      const savedName = sanitizeGuestText(parsed.guestName || '', 80).toLowerCase();
+      const expectedName = sanitizeGuestText(guestName, 80).toLowerCase();
       const savedCat = normalizeInvitationCategory(parsed.invitation_category || parsed.category);
-      if (savedName !== expectedName || savedCat !== guestCategory) {
+      if (savedName !== expectedName || savedCat !== normalizeInvitationCategory(guestCategory)) {
         return fallback;
       }
 
-      const clampedCount = parsed.attending === false
-        ? 0
-        : Math.max(1, Math.min(maxQuota, parseInt(parsed.guestCount ?? 1, 10) || 1));
+      const clampedCount = parsed.attending === true ? 1 : 0;
+      const rsvpStatus = parsed.rsvp_status || (parsed.attending === true ? 'WILL_ATTEND' : parsed.attending === false ? 'DECLINED' : 'PENDING');
 
-      return { ...fallback, ...parsed, guestCount: clampedCount };
-    } catch (e) {
+      return { ...fallback, ...parsed, guestCount: clampedCount, guestCapacity: 1, rsvp_status: rsvpStatus };
+    } catch {
       return fallback;
     }
   }
 
   saveRSVP(data) {
-    const key = this.state.rsvpStorageKey || buildGuestStorageKey(this.state.guestName, this.state.guestCategory, this.state.inviteCode);
-    const maxQuota = getMaxGuestQuota(this.state.guestCategory);
-    const normalizedCount = data.attending === false
-      ? 0
-      : Math.max(1, Math.min(maxQuota, parseInt(data.guestCount ?? this.state.rsvpData?.guestCount ?? 1, 10) || 1));
+    const key = this.state.rsvpStorageKey || buildGuestStorageKey(this.state.guestName, 'B', this.state.inviteCode);
+    const normalizedCount = data.attending === true ? 1 : 0;
+    const rsvpStatus = data.rsvp_status || (data.attending === true ? 'WILL_ATTEND' : data.attending === false ? 'DECLINED' : 'PENDING');
 
     this.state.rsvpData = {
       ...this.state.rsvpData,
       ...data,
       guestName: this.state.guestName,
-      invitation_category: this.state.guestCategory,
-      guestCount: normalizedCount
+      invitation_category: 'B',
+      guestCount: normalizedCount,
+      guestCapacity: 1,
+      rsvp_status: rsvpStatus
     };
     try {
       localStorage.setItem(key, JSON.stringify(this.state.rsvpData));
-    } catch (e) {
+    } catch {
       console.warn('LocalStorage unavailable');
     }
     this.notify();

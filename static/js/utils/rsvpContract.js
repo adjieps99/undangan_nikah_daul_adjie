@@ -1,27 +1,29 @@
 /**
  * Shared RSVP Contract & Guest Identity Isolation Helpers
- * Used cleanly across client state/UI and server validation.
+ * Phase 17: Strict One-Person Invitation Policy ("Undangan ini berlaku untuk 1 orang.")
  */
 
 export const INVITATION_CATEGORIES = Object.freeze({
-  A: 'A', // Maximum 2 guests
-  B: 'B'  // Strictly 1 guest ("Berlaku untuk 1 orang")
+  A: 'A',
+  B: 'B'
 });
+
+export const STRICT_ONE_PERSON_CAPACITY = 1;
 
 export const GUEST_GROUPS = Object.freeze({
   KELUARGA: 'Keluarga',
   TEMAN: 'Teman'
 });
 
-export function sanitizeGuestText(raw, maxLength = 60) {
+export function sanitizeGuestText(raw, maxLength = 80) {
   if (typeof raw !== 'string') return '';
   return raw.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().slice(0, maxLength);
 }
 
 export function normalizeInvitationCategory(raw) {
-  if (typeof raw !== 'string') return INVITATION_CATEGORIES.A;
+  if (typeof raw !== 'string') return INVITATION_CATEGORIES.B;
   const val = raw.trim().toUpperCase();
-  return val === INVITATION_CATEGORIES.B ? INVITATION_CATEGORIES.B : INVITATION_CATEGORIES.A;
+  return val === INVITATION_CATEGORIES.A ? INVITATION_CATEGORIES.A : INVITATION_CATEGORIES.B;
 }
 
 export function normalizeGuestGroup(raw) {
@@ -34,38 +36,36 @@ export function normalizeGuestGroup(raw) {
   return null;
 }
 
-export function getMaxGuestQuota(invitationCategory) {
-  return normalizeInvitationCategory(invitationCategory) === INVITATION_CATEGORIES.B ? 1 : 2;
+export function getMaxGuestQuota(_invitationCategory) {
+  return STRICT_ONE_PERSON_CAPACITY;
 }
 
 /**
- * Generates an isolated storage suffix for a specific guest identity so
+ * Generates an isolated storage key per invitation token or guest identity so
  * different guests opening links on the same browser never inherit each other's RSVP state.
  */
-export function buildGuestStorageKey(guestName, invitationCategory = 'A', inviteCode = '') {
-  const cleanName = sanitizeGuestText(guestName || 'Tamu Undangan', 60)
+export function buildGuestStorageKey(guestName, invitationCategory = 'B', inviteCode = '') {
+  const cleanName = sanitizeGuestText(guestName || 'Tamu Undangan', 80)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '') || 'tamu';
   const cat = normalizeInvitationCategory(invitationCategory);
-  const code = sanitizeGuestText(inviteCode || '', 32)
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '');
+  const code = sanitizeGuestText(inviteCode || '', 64)
+    .replace(/[^a-zA-Z0-9_-]+/g, '');
   return code
-    ? `wedding_rsvp_${code}_${cat}`
+    ? `wedding_rsvp_invite_${code}`
     : `wedding_rsvp_${cleanName}_${cat}`;
 }
 
 /**
- * Validates an RSVP payload separating invitation_category ('A' | 'B')
- * from optional guest_group ('Keluarga' | 'Teman').
+ * Validates an RSVP payload enforcing the strict one-person invitation rule.
  */
 export function validateRsvpPayload(data) {
   if (!data || typeof data !== 'object') {
     return { valid: false, status: 400, error: 'Bad Request', message: 'Invalid JSON payload.' };
   }
 
-  const guestName = sanitizeGuestText(data.guest_name, 60);
+  const guestName = sanitizeGuestText(data.guest_name, 80);
   if (!guestName) {
     return {
       valid: false,
@@ -98,7 +98,6 @@ export function validateRsvpPayload(data) {
     }
   }
   const invitationCategory = normalizeInvitationCategory(data.invitation_category);
-  const maxQuota = getMaxGuestQuota(invitationCategory);
 
   let guestGroup = null;
   if (data.guest_group !== undefined && data.guest_group !== null && data.guest_group !== '') {
@@ -112,7 +111,6 @@ export function validateRsvpPayload(data) {
       };
     }
   } else if (data.group_category !== undefined && data.group_category !== null && data.group_category !== '') {
-    // Support legacy field only if it actually contains Keluarga/Teman
     guestGroup = normalizeGuestGroup(data.group_category);
     if (!guestGroup) {
       return {
@@ -135,15 +133,12 @@ export function validateRsvpPayload(data) {
   }
 
   if (attending === 1) {
-    if (guestCount < 1 || guestCount > maxQuota) {
+    if (guestCount !== 1) {
       return {
         valid: false,
         status: 422,
         error: 'Validation Error',
-        message:
-          invitationCategory === INVITATION_CATEGORIES.B
-            ? 'Undangan kategori B berlaku untuk maksimal 1 orang.'
-            : 'Undangan kategori A berlaku untuk maksimal 2 orang.'
+        message: 'Undangan ini berlaku untuk 1 orang.'
       };
     }
   } else {

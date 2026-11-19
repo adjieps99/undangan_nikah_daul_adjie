@@ -107,10 +107,12 @@ export class CharacterController {
       if (v === 'walking') return { x: 0, y: 2.0, z: 10, rotY: 0 };
       if (v === 'stairs') return { x: 0, y: 3.5, z: -10, rotY: 0 };
       if (v === 'transition') return { x: 0, y: 1.0, z: 21, rotY: 0 };
-      if (v === 'pavilion' || v === 'profile') return { x: 18, y: 2.0, z: -6, rotY: -Math.PI / 2 };
+      if (v === 'profile_path') return { x: 9.0, y: 2.0, z: -4.0, rotY: Math.PI / 2 };
+      if (v === 'pavilion' || v === 'profile') return { x: 15.5, y: 2.0, z: -4.0, rotY: Math.PI / 2 };
       if (v === 'gallery') return { x: 18, y: 2.0, z: 8, rotY: -Math.PI / 2 };
       if (v === 'listening') return { x: -22, y: 1.0, z: 8, rotY: -Math.PI / 2 };
-      if (v === 'foodcourt') return { x: -20, y: 3.2, z: -10, rotY: -Math.PI / 2 };
+      if (v === 'foodcourt') return { x: -20, y: 3.2, z: -8, rotY: -Math.PI / 2 };
+      if (v === 'location' || v === 'junction') return { x: 0, y: 2.0, z: 11.4, rotY: 0 };
       if (v === 'restaurant') return { x: 0, y: 5.0, z: -14.5, rotY: 0 };
       if (v === 'entrance') return { x: 0, y: 0.0, z: 28, rotY: 0 };
     } catch (e) {}

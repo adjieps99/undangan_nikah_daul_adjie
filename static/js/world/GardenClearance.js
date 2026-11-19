@@ -37,8 +37,8 @@ export const LANDMARK_EXCLUSION_CIRCLES = Object.freeze([
   Object.freeze({ id: 'food_plaza_circle', x: -22, z: -10, radius: 7.5 }),
   // Photo Gallery Plaza (x=18, z=8, r=4.5 + margin)
   Object.freeze({ id: 'gallery_plaza_circle', x: 18, z: 8, radius: 6.2 }),
-  // Couple Profile Pavilion Plaza (x=18, z=-6, r=4.5 + margin)
-  Object.freeze({ id: 'profile_plaza_circle', x: 18, z: -6, radius: 6.2 })
+  // Couple Profile Pavilion Plaza (x=18, z=-4, r=4.5 + margin)
+  Object.freeze({ id: 'profile_plaza_circle', x: 18, z: -4, radius: 6.2 })
 ]);
 
 /**
@@ -66,3 +66,36 @@ export function isVegetationSpotClear(x, z, clearanceRadius = 1.2) {
 
   return true;
 }
+
+/**
+ * Pathway lantern positions placed strictly on grass margins outside all walkways,
+ * staircases, plazas, and landmark decks.
+ */
+export const PATHWAY_LANTERN_COORDS = Object.freeze([
+  // Entrance arrival path flanks
+  Object.freeze({ x: -3.6, z: 27.0 }),
+  Object.freeze({ x: 3.6, z: 27.0 }),
+  // Top of Staircase 1 flanks (grass margins outside Central Spine)
+  Object.freeze({ x: -3.6, z: 17.0 }),
+  Object.freeze({ x: 3.6, z: 17.0 }),
+  // Four grass corners framing the Central Cross Junction (z = 8)
+  Object.freeze({ x: -3.6, z: 11.4 }),
+  Object.freeze({ x: 3.6, z: 11.4 }),
+  Object.freeze({ x: -3.6, z: 4.6 }),
+  Object.freeze({ x: 3.6, z: 4.6 }),
+  // South grass corners framing the North Cross Junction (z = -4)
+  Object.freeze({ x: -3.6, z: -1.1 }),
+  Object.freeze({ x: 3.6, z: -1.1 }),
+  // Grass margins flanking foot of Staircase 3 (approach to Food Court)
+  Object.freeze({ x: -8.2, z: -0.9 }),
+  Object.freeze({ x: -8.2, z: -7.1 }),
+  // Music Lounge Wing grass margin
+  Object.freeze({ x: -16.0, z: 11.4 }),
+  // Photo Gallery Wing grass margins
+  Object.freeze({ x: 12.8, z: 11.2 }),
+  Object.freeze({ x: 12.8, z: 4.8 }),
+  // Couple Profile Pavilion approach grass margins (symmetrical around z = -4)
+  Object.freeze({ x: 12.8, z: -1.1 }),
+  Object.freeze({ x: 12.8, z: -6.9 })
+]);
+

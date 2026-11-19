@@ -44,7 +44,7 @@ import { TerrainManager } from '../static/js/world/TerrainManager.js';
 import { WEDDING_DATA } from '../static/js/data/wedding.js';
 import { ASSET_MANIFEST, getTrackFilename } from '../static/js/config/assetManifest.js';
 import { shouldPreservePlaybackOnSelect, shouldResumeBgmAfterVoice } from '../static/js/game/AudioSystem.js';
-import { isVegetationSpotClear } from '../static/js/world/GardenClearance.js';
+import { isVegetationSpotClear, PATHWAY_LANTERN_COORDS } from '../static/js/world/GardenClearance.js';
 import {
   OUTDOOR_EXIT_SPAWN,
   OUTDOOR_EXIT_CAMERA_CONFIG,
@@ -181,6 +181,40 @@ test('TerrainManager walkability, Staircase 2 continuity, and resolveFilteredGro
   assert.equal(TerrainManager.resolveFilteredGroundHeight(0, 10, 2.04), 2.04);
   assert.equal(TerrainManager.resolveFilteredGroundHeight(0, 10, 5.2), 2.0);
   assert.equal(TerrainManager.resolveFilteredGroundHeight(0, 10, null), 2.0);
+
+  // East Wing Profile path & Pavilion elevation must stay at y = 2.0 (never drops to 0.0 for z < -6)
+  assert.equal(TerrainManager.getHeight(8.5, -4.0), 2.0);
+  assert.equal(TerrainManager.getHeight(8.5, -6.5), 2.0);
+  assert.equal(TerrainManager.getHeight(18.0, -4.0), 2.0);
+  assert.equal(TerrainManager.getHeight(18.0, -7.2), 2.0);
+  assert.equal(TerrainManager.resolveFilteredGroundHeight(10.0, -4.0, 2.04), 2.04);
+  assert.equal(TerrainManager.resolveFilteredGroundHeight(16.0, -6.5, 2.16), 2.16);
+  assert.equal(TerrainManager.checkCollision(8.5, -4.0), false);
+  assert.equal(TerrainManager.checkCollision(15.5, -4.0), false);
+  assert.equal(TerrainManager.checkCollision(18.0, -4.0), true); // centerpiece easel
+
+  // Food Court Forecourt Landing elevation & walkability
+  assert.equal(TerrainManager.getHeight(-16.8, -8.0), 3.2);
+  assert.equal(TerrainManager.getHeight(-16.8, -2.0), 3.2);
+  assert.equal(TerrainManager.checkCollision(-16.8, -8.0), false);
+  assert.equal(TerrainManager.checkCollision(-22.0, -10.0), false);
+
+  // Central Cross Junction 3D Location Pin beacon at (0, 2.0, 8): center protected, all 4 sides wide open
+  assert.equal(TerrainManager.checkCollision(0, 8), true);
+  assert.equal(TerrainManager.checkCollision(0, 10.0), false);
+  assert.equal(TerrainManager.checkCollision(0, 6.0), false);
+  assert.equal(TerrainManager.checkCollision(1.8, 8.0), false);
+  assert.equal(TerrainManager.checkCollision(-1.8, 8.0), false);
+
+  // Every pathway lantern must sit strictly on grass outside all walkable paths/decks
+  assert.ok(PATHWAY_LANTERN_COORDS.length >= 12);
+  for (const c of PATHWAY_LANTERN_COORDS) {
+    assert.equal(
+      TerrainManager.isWalkable(c.x, c.z),
+      false,
+      `Lantern at (${c.x}, ${c.z}) overlaps a walkable path or deck!`
+    );
+  }
 });
 
 test('wedding data preserves official couple details, attire rules, 6 favorite restaurants, and exact 5-track playlist', () => {

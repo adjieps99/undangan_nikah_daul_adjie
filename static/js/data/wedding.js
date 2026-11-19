@@ -53,8 +53,8 @@ export const WEDDING_DATA = {
       name: 'Martabak San Fransisco',
       ownerLabel: 'Favorit Daulika',
       city: 'Bandung',
-      mustTry: ['Martabak Sapi Telur Asin', 'Martabak Ayam Rica-Rica'],
-      note: 'Kalau lagi pengen yang gurih dan agak niat, coba yang sapi telur asin. Ayam rica-ricanya juga jangan dilewatin — pilihan martabaknya cukup beragam di sini.',
+      mustTry: ['Martabak Ayam', 'Martabak Sapi Telur Asin'],
+      note: 'Kalau lagi pengen yang gurih, Martabak Ayam bisa jadi pilihan. Kuliner legend kota Bandung ini masih jadi Martabak terbaik versi Daul.',
       mapsUrl: 'https://share.google/67KGEGQkmw9iKx4Og'
     },
     {
@@ -62,7 +62,7 @@ export const WEDDING_DATA = {
       ownerLabel: 'Favorit Adjie',
       city: 'Lombok',
       mustTry: ['Sate Rembiga', 'Bebalung / Plecing'],
-      note: 'Kalau sampai Lombok, ini salah satu yang jangan dilewatin. Sate rembiga-nya punya rasa pedas, manis, gurih yang khas banget. Dan kalau kuat makan pedas, plecing-nya sekalian!',
+      note: 'Kalau sampai Lombok, yang satu ini jangan dilewatin. Sate Rembiga punya rasa pedas, manis, gurih yang khas banget. Kalau kuat makan pedes bisa coba plecingnya.',
       mapsUrl: 'https://share.google/P6ErOlDmWjit3enqu'
     },
     {
@@ -70,7 +70,7 @@ export const WEDDING_DATA = {
       ownerLabel: 'Favorit Bersama',
       city: '',
       mustTry: ['Soto Ayam Kampung', 'Soto Daging', 'Gorengan sebagai pendamping'],
-      note: 'Ini tipe makanan yang paling enak dimakan pas lagi pengen yang hangat-hangat. Soto ayamnya aman, kuahnya ringan, terus tinggal tambah gorengan.',
+      note: 'Comfort food kami sepulang kantor. Dua mangkuk soto dan berbagai macam gorengan yang bikin kami selalu balik kesini.',
       mapsUrl: 'https://share.google/e4QDt7v5I2z7pVBXG'
     },
     {
@@ -78,15 +78,15 @@ export const WEDDING_DATA = {
       ownerLabel: 'Tempat Favorit Lainnya',
       city: '',
       mustTry: ['Original Poured Tiramisu', 'Doenjang Carbonara'],
-      note: 'Kalau yang ini lebih cocok buat ngobrol lama-lama. Makanannya seru, tapi kalau cuma mau pesan satu dessert: poured tiramisu!',
+      note: 'Masih jadi favorite kami untuk makan sambil ngobrol lama. Interior dan brandingnya masih juara. Cuma sabar buat antri ya :)',
       mapsUrl: 'https://share.google/gzmH8GyjamnXyv1vr'
     },
     {
       name: 'Seafood Ayu',
       ownerLabel: 'Tempat Favorit Lainnya',
       city: '',
-      mustTry: ['Ikan Kuwe Bakar', 'Cumi Saus Padang', 'Udang Goreng Tepung'],
-      note: 'Kalau datang rame-rame, ini paling enak buat sharing. Ikan bakar buat tengah meja, terus cumi saus Padang buat yang suka pedas.',
+      mustTry: ['Ikan Kuwe Bakar', 'Cumi Goreng Tepung', 'Cumi Saus Padang'],
+      note: 'Kalau pengen makan kenyang kami suka dateng kesini. Rekomendasi juga kalau mau makan bareng keluarga. Kami selalu order repeat ikan bakar & cumi tepungnya!',
       mapsUrl: 'https://share.google/XpDKQXd4eWo4Cg3cm'
     },
     {
@@ -94,7 +94,7 @@ export const WEDDING_DATA = {
       ownerLabel: 'Khusus Buat Teman-Teman SERA',
       city: '',
       mustTry: ['Ayam Pop', 'Rendang', 'Sambal Ijo'],
-      note: 'Kalau ini khusus buat teman-teman SERA. Habis Jumatan, kalau bingung makan di mana, ya udah gas Karya Bundo aja. Anak-anak SERA bisa jalan bareng, naik JakLingko dari area Grha SERA, terus makan rame-rame.',
+      note: 'Kalau ini khusus buat teman-teman SERA. Habis jumatan, kalau bingung makan dimana, ya udah gas kesini aja. Biasanya jalan bareng naik JakLingko dari Grha SERA terus makan rame-rame.',
       mapsUrl: 'https://share.google/Wm3DYP8YlqDnqKVzN'
     }
   ],

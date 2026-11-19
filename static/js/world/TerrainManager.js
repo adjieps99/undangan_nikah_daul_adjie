@@ -20,8 +20,8 @@ export class TerrainManager {
       return 2.0 + Math.max(0, Math.min(1, t)) * (5.0 - 2.0);
     }
 
-    // 2. Culinary Terrace: Food Court Favorit (y = 3.2, x in [-34, -14], z in [-18, -2])
-    if (x <= -14.0 && x >= -34.0 && z >= -18.0 && z <= -2.0) {
+    // 2. Culinary Terrace: Food Court Favorit (y = 3.2, x in [-34, -14], z in [-18, -1.8])
+    if (x <= -14.0 && x >= -34.0 && z >= -18.0 && z <= -1.8) {
       return 3.2;
     }
 
@@ -44,8 +44,9 @@ export class TerrainManager {
       return 2.0 - Math.max(0, Math.min(1, t)) * (2.0 - 1.0);
     }
 
-    // 4. Central Garden & East Wing Terrace (y = 2.0, x in [-14, 28], z in [-6, 18])
-    if (x >= -14.0 && x <= 28.0 && z >= -6.0 && z <= 18.0) {
+    // 4. Central Garden & East/West North Wing Terrace (y = 2.0, x in [-14, 28], z in [-14, 18])
+    // Note: Top Terrace (z<=-14), Grand Staircase, Food Court, and Staircase 3 are handled above.
+    if (x >= -14.0 && x <= 28.0 && z >= -14.0 && z <= 18.0) {
       return 2.0;
     }
 
@@ -70,7 +71,8 @@ export class TerrainManager {
    */
   static isWalkable(x, z) {
     // 1. Entrance Plaza & Arrival Promenade (y = 0.0)
-    if (x >= -10 && x <= 10 && z >= 24 && z <= 36) return true;
+    if (Math.hypot(x, z - 32.0) <= 5.5) return true;
+    if (x >= -3.0 && x <= 3.0 && z >= 24.0 && z <= 32.0) return true;
 
     // 2. Staircase 1 (Entrance to Central Garden)
     if (x >= -3.5 && x <= 3.5 && z >= 17.5 && z <= 24.5) return true;
@@ -87,18 +89,20 @@ export class TerrainManager {
     if (Math.hypot(x - (-24), z - 8) <= 6.5) return true;
 
     // 6. West Secondary Path to Food Court & Staircase 3
-    // Main pathway connector & Staircase 3 (x: -15.5 to -3.0, z: -7.0 to -1.0)
-    if (x >= -15.5 && x <= -3.0 && z >= -7.0 && z <= -1.0) return true;
-    // Food Court Landing Platform / Bordes & Connector Walkway (x: -20.0 to -14.0, z: -9.5 to -1.0)
-    if (x >= -20.0 && x <= -14.0 && z >= -9.5 && z <= -1.0) return true;
-    // Food Court Walkway & Dining Deck (x: -34 to -14, z: -17 to -4)
-    if (x >= -34.0 && x <= -14.0 && z >= -17.0 && z <= -4.0) return true;
+    // Main pathway connector & Staircase 3 (x: -15.5 to -2.5, z: -6.2 to -1.8)
+    if (x >= -15.5 && x <= -2.5 && z >= -6.2 && z <= -1.8) return true;
+    // Food Court Forecourt Landing Terrace (x: -19.8 to -14.0, z: -13.5 to -2.4)
+    if (x >= -19.8 && x <= -14.0 && z >= -13.5 && z <= -2.4) return true;
+    // Food Court Dining Deck (x: -28.6 to -19.0, z: -13.5 to -2.5)
+    if (x >= -28.6 && x <= -19.0 && z >= -13.5 && z <= -2.5) return true;
 
     // 7. East Secondary Path to Photo Gallery (x: 2.5 to 24, z: 5.5 to 10.5)
     if (x >= 2.5 && x <= 24.0 && z >= 5.5 && z <= 10.5) return true;
 
-    // 8. East Secondary Path to Couple Profile Pavilion (x: 2.5 to 24, z: -8.5 to -3.5)
-    if (x >= 2.5 && x <= 24.0 && z >= -8.5 && z <= -3.5) return true;
+    // 8. East Secondary Path to Couple Profile Pavilion (symmetrical at z = -4.0)
+    if (x >= 2.5 && x <= 14.8 && z >= -6.2 && z <= -1.8) return true;
+    // Couple Profile Pavilion square stone deck (centered at x = 18, z = -4)
+    if (x >= 14.2 && x <= 21.8 && z >= -7.8 && z <= -0.2) return true;
 
     // 9. Grand Central Staircase to Restaurant
     if (x >= -4.0 && x <= 4.0 && z >= -14.5 && z <= -5.5) return true;
@@ -119,17 +123,20 @@ export class TerrainManager {
     // Must be inside designated walkable zones
     if (!this.isWalkable(x, z)) return true;
 
+    // 0. Central Cross Junction 3D Location Pin beacon (centered at x = 0, z = 8; leaves ~1.9m walkway all around)
+    if (Math.hypot(x - 0, z - 8) < 0.62) return true;
+
     // 1. Listening Station turntable pedestal (centered at x = -24, z = 8)
     if (Math.hypot(x - (-24), z - 8) < 1.2) return true;
 
-    // 2. Couple Profile centerpiece easel (centered at x = 18, z = -6)
-    if (Math.hypot(x - 18, z - (-6)) < 1.2) return true;
+    // 2. Couple Profile centerpiece easel (centered at x = 18, z = -4)
+    if (Math.hypot(x - 18, z - (-4)) < 1.2) return true;
 
     // 3. Photo Gallery wall back structure (at x = 22.0, z in [5, 11])
     if (x >= 21.0 && x <= 23.0 && z >= 5.0 && z <= 11.0) return true;
 
-    // 4. Food Court back kitchen serving counter (at x in [-30, -26], z in [-12, -8])
-    if (x <= -26.5 && z >= -12.5 && z <= -7.5) return true;
+    // 4. Food Court back kitchen serving counter (at x in [-30, -26.5], z in [-10.6, -5.4])
+    if (x <= -26.5 && z >= -10.6 && z <= -5.4) return true;
 
     // 5. The Hachi Garden Restaurant Front Solid Walls (Doors at x in [-2.4, 2.4], z = -16.2)
     if (z < -16.5) {

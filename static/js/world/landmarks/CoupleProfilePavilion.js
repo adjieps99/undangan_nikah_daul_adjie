@@ -3,22 +3,30 @@ import * as THREE from 'three';
 export class CoupleProfilePavilion {
   constructor() {
     this.group = new THREE.Group();
-    this.group.position.set(18, 2.0, -6);
+    this.group.position.set(18, 2.0, -4);
     this.group.rotation.y = -Math.PI / 2;
+    this.walkableMesh = null;
     this.buildPavilion();
   }
 
   buildPavilion() {
     const teakMat = new THREE.MeshLambertMaterial({ color: '#4a2c17' });
+    const plinthMat = new THREE.MeshLambertMaterial({ color: '#4a3f35' });
     const floorMat = new THREE.MeshLambertMaterial({ color: '#d9cdb8' });
     const goldMat = new THREE.MeshLambertMaterial({ color: '#d4af37' });
     const flowerMat = new THREE.MeshLambertMaterial({ color: '#ff758f' });
     const lightMat = new THREE.MeshLambertMaterial({ color: '#ffeaa7', emissive: 0xaa7711 });
 
-    // 1. Raised Stone Base & Deck
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.3, 7.2), floorMat);
-    deck.position.y = 0.15;
+    // 1. Clean Raised Stone Base & Plinth Trim (flush with East pathway)
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(7.52, 0.08, 7.52), plinthMat);
+    plinth.position.y = 0.04;
+    this.group.add(plinth);
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.16, 7.2), floorMat);
+    deck.position.y = 0.08;
+    deck.userData.walkableSurface = true;
     this.group.add(deck);
+    this.walkableMesh = deck;
 
     // 2. 4 Teak Timber Pergola Columns
     const postGeo = new THREE.BoxGeometry(0.35, 3.6, 0.35);

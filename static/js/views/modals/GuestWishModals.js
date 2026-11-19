@@ -16,7 +16,7 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
 
   content.innerHTML = `
     <p style="font-size: 12.5px; color: #f5e6a3; margin: 0 0 12px; line-height: 1.5; text-align: center;">
-      Terima kasih sudah hadir di hari bahagia kami! Titipkan doa dan pesan hangat untuk Adjie &amp; Daulika.
+      Makasih banget sudah mampir di hari bahagia kami! Titipkan doa dan pesan hangat untuk Adjie &amp; Daulika di sini ya.
     </p>
     <div class="wish-form-group">
       <label class="wish-field-label" for="guest-wish-sender">Nama Pengirim</label>
@@ -66,9 +66,15 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
   visPublicBtn.addEventListener('click', () => syncVisibility('PUBLIC'));
   visPrivateBtn.addEventListener('click', () => syncVisibility('PRIVATE'));
 
+  let isSubmitted = false;
   const submitBtn = createRetroButton({
     text: 'Kirim Doa',
     onClick: async () => {
+      if (isSubmitted) {
+        backdrop._cleanup();
+        return;
+      }
+
       const senderName = senderInput.value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().slice(0, 80);
       const message = messageInput.value.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().slice(0, 500);
 
@@ -77,7 +83,7 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
         feedbackEl.style.background = 'rgba(255, 70, 70, 0.16)';
         feedbackEl.style.border = '1px solid #ff6666';
         feedbackEl.style.color = '#ffb3b3';
-        feedbackEl.textContent = 'Mohon tuliskan doa atau pesan terlebih dahulu.';
+        feedbackEl.textContent = 'Mohon tuliskan doa atau pesan terlebih dahulu ya.';
         messageInput.focus();
         return;
       }
@@ -108,19 +114,34 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
           return;
         }
 
+        isSubmitted = true;
         feedbackEl.style.display = 'block';
         feedbackEl.style.background = 'rgba(60, 190, 100, 0.18)';
         feedbackEl.style.border = '1px solid #5ee085';
         feedbackEl.style.color = '#cbffda';
-        feedbackEl.textContent = 'Terima kasih sudah menitipkan doa dan pesan untuk kami. ❤️';
+        feedbackEl.textContent = visibility === 'PRIVATE'
+          ? 'Terima kasih banyak sudah menitipkan doa untuk kami! Pesan pribadimu tersimpan khusus untuk Adjie & Daulika. ❤️'
+          : 'Terima kasih banyak sudah menitipkan doa dan pesan untuk kami! Doamu sekarang sudah tampil di Pesan Teman. ❤️';
 
         messageInput.value = '';
         counterEl.textContent = '0 / 500';
         submitBtn.innerText = 'Tutup';
         submitBtn.disabled = false;
-        submitBtn.onclick = () => {
-          backdrop._cleanup();
-        };
+
+        if (visibility === 'PUBLIC' && !content.querySelector('#after-wish-read-btn')) {
+          const readAfterBtn = createRetroButton({
+            text: 'Baca Pesan Teman',
+            variant: 'secondary',
+            onClick: () => {
+              backdrop._cleanup();
+              openReadWishesModal({ onOpenSendWish: () => openSendWishModal() });
+            }
+          });
+          readAfterBtn.id = 'after-wish-read-btn';
+          readAfterBtn.style.width = '100%';
+          readAfterBtn.style.marginTop = '8px';
+          content.appendChild(readAfterBtn);
+        }
       } catch {
         feedbackEl.style.display = 'block';
         feedbackEl.style.background = 'rgba(255, 70, 70, 0.16)';
@@ -194,7 +215,7 @@ export function openReadWishesModal({ onOpenSendWish = null, onCloseComplete = n
       const emptyText = document.createElement('div');
       emptyText.className = 'wish-card-body';
       emptyText.style.fontStyle = 'normal';
-      emptyText.textContent = 'Belum ada pesan publik yang ditampilkan saat ini. Jadilah yang pertama menitipkan doa untuk Adjie & Daulika!';
+      emptyText.textContent = 'Belum ada pesan publik saat ini. Yuk jadi yang pertama menitipkan doa untuk Adjie & Daulika!';
       stageEl.appendChild(emptyText);
 
       if (typeof onOpenSendWish === 'function') {

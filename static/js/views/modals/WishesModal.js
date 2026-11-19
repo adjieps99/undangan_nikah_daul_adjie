@@ -18,12 +18,12 @@ export function createWishesModal() {
   const formBox = document.createElement('form');
   formBox.className = 'wish-form-box';
   formBox.innerHTML = `
-    <h4 style="font-size: 11px; color: var(--color-gold-light); margin-bottom: 8px;">KIRIM UCAPAN &amp; DOA</h4>
-    <textarea id="wish-input" class="wish-textarea" rows="3" maxlength="500" placeholder="Tuliskan ucapan &amp; doa restu Anda di sini..." required></textarea>
+    <h4 style="font-size: 11px; color: var(--color-gold-light); margin-bottom: 8px;">KIRIM DOA &amp; PESAN</h4>
+    <textarea id="wish-input" class="wish-textarea" rows="3" maxlength="500" placeholder="Tulis doa atau pesan hangatmu untuk Adjie &amp; Daulika di sini..." required></textarea>
     <div id="wish-modal-counter" class="wish-char-counter">0 / 500</div>
     <div class="wish-vis-row" style="margin: 8px 0 10px;">
-      <button type="button" class="wish-vis-pill active" id="wish-modal-vis-public">Public</button>
-      <button type="button" class="wish-vis-pill" id="wish-modal-vis-private">Khusus Pengantin (Private)</button>
+      <button type="button" class="wish-vis-pill active" id="wish-modal-vis-public">Tampilkan (Publik)</button>
+      <button type="button" class="wish-vis-pill" id="wish-modal-vis-private">Khusus Adjie &amp; Daulika (Privat)</button>
     </div>
   `;
 

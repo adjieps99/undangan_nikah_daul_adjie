@@ -103,6 +103,9 @@ export class MainHallView {
         <div id="hall-guest-label" class="main-hall-guest-label"></div>
       </div>
       <div class="main-hall-header-actions">
+        <button id="hall-quick-wish-btn" class="retro-btn main-hall-wish-btn" title="Kirim Doa &amp; Pesan untuk Adjie &amp; Daulika">
+          💌 Kirim Doa
+        </button>
         <button id="hall-audio-btn" class="retro-btn retro-btn-secondary main-hall-audio-btn" title="Musik &amp; Suara" aria-label="Musik dan Suara">
           ${audioSystem.isMuted ? '🔇' : '🔊'}
         </button>
@@ -115,6 +118,17 @@ export class MainHallView {
     const guestLabelEl = overlay.querySelector('#hall-guest-label');
     if (guestLabelEl) {
       guestLabelEl.textContent = `Ramah Tamah • ${state.guestName || 'Tamu Undangan'}`;
+    }
+
+    const quickWishBtn = overlay.querySelector('#hall-quick-wish-btn');
+    if (quickWishBtn) {
+      quickWishBtn.addEventListener('click', () => {
+        openSendWishModal({
+          onOpenReadWishes: () => openReadWishesModal({
+            onOpenSendWish: () => openSendWishModal()
+          })
+        });
+      });
     }
 
     const audioBtn = overlay.querySelector('#hall-audio-btn');
@@ -166,7 +180,7 @@ export class MainHallView {
       const noticeToast = document.createElement('div');
       noticeToast.className = 'hall-entrance-toast';
       noticeToast.id = 'hall-entrance-toast';
-      noticeToast.textContent = 'Selamat datang! Undangan ini berlaku untuk 1 orang. Kehadiran Anda sudah kami catat.';
+      noticeToast.textContent = 'Selamat datang di Ruang Ramah Tamah! Undangan berlaku untuk 1 orang & kehadiranmu sudah kami catat.';
       this.container.appendChild(noticeToast);
       this._entranceToastTimer = setTimeout(() => {
         noticeToast.style.opacity = '0';
@@ -380,7 +394,7 @@ export class MainHallView {
       this.sitButton.textContent = 'Keluar ke taman';
       this.sitButton.style.display = 'inline-flex';
     } else if (this.isNearCouple) {
-      this.statusTextEl.textContent = 'Terima kasih sudah hadir di hari bahagia kami! Jangan lupa tinggalkan doa dan pesan untuk kami, ya.';
+      this.statusTextEl.textContent = 'Makasih sudah mampir ke pelaminan! Jangan lupa titip doa dan pesan untuk Adjie & Daulika, ya.';
       this.sitButton.textContent = 'Kirim Doa';
       this.sitButton.style.display = 'inline-flex';
       if (this.secondaryBtn) {
@@ -388,7 +402,7 @@ export class MainHallView {
         this.secondaryBtn.style.display = 'inline-flex';
       }
     } else if (this.nearbyNpcSeat) {
-      this.statusTextEl.textContent = 'Ada pesan manis dari teman-teman untuk Adjie & Daulika. Mau membacanya?';
+      this.statusTextEl.textContent = 'Ada titipan doa dan pesan manis dari teman-teman untuk Adjie & Daulika. Mau intip?';
       this.sitButton.textContent = 'Baca Pesan';
       this.sitButton.style.display = 'inline-flex';
     } else if (this.nearbySeat) {
@@ -685,7 +699,7 @@ export class MainHallView {
     this.isNearExit = false;
 
     // 2. Pelaminan Couple proximity (Adjie & Daulika at z = -14.15, riser edge z = -12.4)
-    if (!this.isSitting && Math.abs(charPos.x) <= 3.6 && charPos.z <= -9.75) {
+    if (!this.isSitting && Math.abs(charPos.x) <= 4.8 && charPos.z <= -8.6) {
       this.isNearCouple = true;
       this.nearbyNpcSeat = null;
       this.nearbySeat = null;

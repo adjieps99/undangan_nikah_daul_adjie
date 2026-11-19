@@ -810,7 +810,7 @@ app.post('/api/wishes', (req: Request, res: Response) => {
     sender_name: senderName,
     message,
     visibility: rawVisibility as WishVisibility,
-    moderation_status: 'PENDING',
+    moderation_status: rawVisibility === 'PUBLIC' ? 'APPROVED' : 'PENDING',
     moderated_at: null,
     created_at: new Date().toISOString(),
   };

@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { TextureFactory } from '../three/TextureFactory.js';
 import { TerrainManager } from './TerrainManager.js';
-import { isVegetationSpotClear } from './GardenClearance.js';
+import { isVegetationSpotClear, PATHWAY_LANTERN_COORDS } from './GardenClearance.js';
 import { GardenEntrance } from './landmarks/GardenEntrance.js';
 import { CoupleProfilePavilion } from './landmarks/CoupleProfilePavilion.js';
 import { PhotoGallery } from './landmarks/PhotoGallery.js';
 import { ListeningStation } from './landmarks/ListeningStation.js';
 import { FoodCourt } from './landmarks/FoodCourt.js';
 import { HachiGardenRestaurant } from './landmarks/HachiGardenRestaurant.js';
+import { LocationPinLandmark } from './landmarks/LocationPinLandmark.js';
 
 export class HachiGarden3D {
   constructor(scene) {
@@ -36,13 +37,19 @@ export class HachiGarden3D {
     this.buildListeningStationPathwayFeatures();
 
     // 3. Cultural & Architectural Landmarks (also registered for camera occlusion checks)
-    this.gardenEntrance = new GardenEntrance(); // Landmark 1
+    this.gardenEntrance = new GardenEntrance(); // Entrance Archway
     this.group.add(this.gardenEntrance.group);
     this.cameraOccluders.push(this.gardenEntrance.group);
+
+    this.locationPin = new LocationPinLandmark(); // Landmark 1: Waktu & Lokasi Acara at Central Junction (0, 2.0, 8)
+    this.group.add(this.locationPin.group);
 
     this.coupleProfile = new CoupleProfilePavilion(); // Landmark 2
     this.group.add(this.coupleProfile.group);
     this.cameraOccluders.push(this.coupleProfile.group);
+    if (this.coupleProfile.walkableMesh) {
+      this.walkableMeshes.push(this.coupleProfile.walkableMesh);
+    }
 
     this.photoGallery = new PhotoGallery(); // Landmark 3
     this.group.add(this.photoGallery.group);
@@ -54,6 +61,9 @@ export class HachiGarden3D {
     this.foodCourt = new FoodCourt(); // Landmark 5
     this.group.add(this.foodCourt.group);
     this.cameraOccluders.push(this.foodCourt.group);
+    if (this.foodCourt.walkableMesh) {
+      this.walkableMeshes.push(this.foodCourt.walkableMesh);
+    }
 
     this.hachiRestaurant = new HachiGardenRestaurant(); // Landmark 6
     this.group.add(this.hachiRestaurant.group);
@@ -270,16 +280,19 @@ export class HachiGarden3D {
     // --- Terrace 0: Garden Entrance Plateau (y = 0.0, z: 24 to 38, x: -16 to 16) ---
     addPlateau(0, 0.0, 31, 32, 14);
 
-    // --- Terrace 1: Central Garden & East Wing Plateau (y = 2.0, z: -6 to 18, x: -14 to 28) ---
+    // --- Terrace 1: Central Garden & East Wing Plateau (y = 2.0, z: -14 to 18, x: -14 to 28) ---
     // Split western lip around Staircase 2 cutout (x in [-14, -8.5], z in [5.7, 10.3]) so steps are never buried
     addPlateau(9.75, 2.0, 6.0, 36.5, 24.0);      // Main Terrace 1 (x: -8.5 to 28, z: -6 to 18)
     addPlateau(-11.25, 2.0, -0.15, 5.5, 11.7);  // West lip North of Staircase 2 (z: -6 to 5.7)
     addPlateau(-11.25, 2.0, 14.15, 5.5, 7.7);   // West lip South of Staircase 2 (z: 10.3 to 18)
+    // North Wing Terrace 1 lawns flanking Grand Central Staircase up to Hachi retaining wall (z: -14 to -6)
+    addPlateau(15.9, 2.0, -10.0, 24.2, 8.0);    // East Wing North lawn (x: 3.8 to 28, z: -14 to -6)
+    addPlateau(-8.9, 2.0, -10.0, 10.2, 8.0);    // West Wing North lawn (x: -14 to -3.8, z: -14 to -6)
     // Front Retaining Wall (z = 18.0, height = 2.0), split cleanly by Staircase 1 at x in [-3.2, 3.2]
     addRetainingWall(-8.6, 0.0, 2.0, 18.0, 10.8, true); // West section (x: -14 to -3.2)
     addRetainingWall(15.6, 0.0, 2.0, 18.0, 24.8, true); // East section (x: 3.2 to 28)
-    // East Boundary Retaining Wall (x = 28.0, z: -6 to 18)
-    addRetainingWall(28.0, 0.0, 2.0, 6.0, 24.0, false);
+    // East Boundary Retaining Wall (x = 28.0, z: -14 to 18)
+    addRetainingWall(28.0, 0.0, 2.0, 2.0, 32.0, false);
 
     // --- Terrace 2: Music Lounge Terrace (y = 1.0, z: 0 to 16, x: -36 to -14) ---
     addPlateau(-25, 1.0, 8, 22, 16);
@@ -312,6 +325,8 @@ export class HachiGarden3D {
 
   buildCurvingStonePaths() {
     const flagstoneTex = TextureFactory.createFlagstoneTexture(512);
+    // Reset base repeat to 1x1 so per-segment world-scale UVs keep every flagstone crisp & square
+    flagstoneTex.repeat.set(1, 1);
     const stonePathMat = new THREE.MeshLambertMaterial({
       map: flagstoneTex,
       color: '#d4c9b6'
@@ -319,14 +334,26 @@ export class HachiGarden3D {
     const curbStoneMat = new THREE.MeshLambertMaterial({ color: '#4a3f35' });
     const stairStepMat = new THREE.MeshLambertMaterial({ color: '#564c42' });
 
-    // Helper: Add clean flagstone paving segment without rotation confusion
+    const TILE_WORLD_UNIT = 2.4;
+
+    // Helper: Add clean flagstone paving segment with world-proportional UVs (zero stretching)
     // curbSides: 'x' = curbs on +/- X (for North-South paths), 'z' = curbs on +/- Z (for East-West paths), 'none' = no curbs
     const addPathSegment = (x, y, z, widthInX, lengthInZ, curbSides = 'none') => {
       const segGroup = new THREE.Group();
       segGroup.position.set(x, y + 0.02, z);
 
       // Paving slab (top sits at y + 0.04; register in walkableMeshes so raycast lands flush on top!)
-      const paving = new THREE.Mesh(new THREE.BoxGeometry(widthInX, 0.04, lengthInZ), stonePathMat);
+      const pavingGeo = new THREE.BoxGeometry(widthInX, 0.04, lengthInZ);
+      const uv = pavingGeo.attributes.uv;
+      const norm = pavingGeo.attributes.normal;
+      for (let i = 0; i < uv.count; i++) {
+        if (Math.abs(norm.getY(i)) > 0.5) {
+          uv.setXY(i, uv.getX(i) * (widthInX / TILE_WORLD_UNIT), uv.getY(i) * (lengthInZ / TILE_WORLD_UNIT));
+        }
+      }
+      uv.needsUpdate = true;
+
+      const paving = new THREE.Mesh(pavingGeo, stonePathMat);
       paving.userData.walkableSurface = true;
       segGroup.add(paving);
       this.walkableMeshes.push(paving);
@@ -352,12 +379,22 @@ export class HachiGarden3D {
       this.group.add(segGroup);
     };
 
-    // Helper: Add destination plaza with stone torus rim
+    // Helper: Add destination plaza with stone torus rim & proportional flagstone UVs
     const addDestinationPlaza = (x, y, z, radius, segments = 24) => {
       const plazaGroup = new THREE.Group();
       plazaGroup.position.set(x, y + 0.02, z);
 
       const plazaGeo = new THREE.CylinderGeometry(radius, radius + 0.05, 0.04, segments);
+      const uv = plazaGeo.attributes.uv;
+      const norm = plazaGeo.attributes.normal;
+      const capScale = (radius * 2) / TILE_WORLD_UNIT;
+      for (let i = 0; i < uv.count; i++) {
+        if (Math.abs(norm.getY(i)) > 0.5) {
+          uv.setXY(i, uv.getX(i) * capScale, uv.getY(i) * capScale);
+        }
+      }
+      uv.needsUpdate = true;
+
       const plazaMesh = new THREE.Mesh(plazaGeo, stonePathMat);
       plazaMesh.userData.walkableSurface = true;
       plazaGroup.add(plazaMesh);
@@ -470,8 +507,11 @@ export class HachiGarden3D {
     // Central Grand Junction Hub (z: 5.0 to 11.0, width 5.0 in X connects seamlessly to East/West branches)
     addPathSegment(0, 2.0, 8.0, 5.0, 6.0, 'none');
 
-    // North section (z: -6 to 5.0)
-    addPathSegment(0, 2.0, -0.5, 5.0, 11.0, 'x');
+    // Mid-North section (z: -2.0 to 5.0)
+    addPathSegment(0, 2.0, 1.5, 5.0, 7.0, 'x');
+
+    // North Cross Junction Hub (z: -6.0 to -2.0, connects seamlessly to Food Court West & Profile East branches)
+    addPathSegment(0, 2.0, -4.0, 5.0, 4.0, 'none');
 
     // -------------------------------------------------------------
     // 3. SECONDARY PATHWAY: MUSIC LOUNGE (WEST WING, y = 1.0)
@@ -492,20 +532,16 @@ export class HachiGarden3D {
     // -------------------------------------------------------------
     // 4. SECONDARY PATHWAY: FAVORITE FOOD COURT (NORTHWEST WING, y = 3.2)
     // -------------------------------------------------------------
-    // West branch apron connecting Central Promenade (x: -2.5) to Staircase 3 foot (x: -8.5), z in [-6.1, -1.9]
-    addPathSegment(-5.5, 2.0, -4.0, 6.2, 4.2, 'z');
+    // West branch apron connecting North Junction Hub (x: -2.5) to Staircase 3 foot (x: -8.5), z in [-6.0, -2.0]
+    addPathSegment(-5.5, 2.0, -4.0, 6.0, 4.0, 'z');
 
     // Staircase 3: Connecting Central Garden (y = 2.0, x = -8.5) up to Food Court (y = 3.2, x = -14.5)
     // 7 steps, dx = -0.857, dy = 0.171, dz = 0, width = 4.2
     addStaircase(-8.5, 2.18, -4.0, 7, -0.857, 0.171, 0, 4.2);
 
-    // Architectural Landing Platform (Bordes) flush at top of Staircase 3 (x: -14.2 to -17.5)
-    addPathSegment(-15.85, 3.2, -4.0, 3.3, 4.4, 'z');
-    addPathSegment(-16.5, 3.2, -4.0, 4.8, 4.4, 'z');
-    addPathSegment(-18.5, 3.2, -7.5, 4.4, 7.6, 'x');
-
-    // Food Court Forecourt Landing (connecting seamlessly into the 12m x 9m dining deck)
-    addDestinationPlaza(-20.0, 3.2, -10.0, 5.2, 22);
+    // Unified Food Court Forecourt Terrace (x: -19.5 to -14.1, z: -13.6 to -2.4)
+    // Single flush flagstone slab sitting cleanly between North & South retaining walls and connecting into Food Court deck
+    addPathSegment(-16.8, 3.2, -8.0, 5.4, 11.2, 'none');
 
     // -------------------------------------------------------------
     // 5. SECONDARY PATHWAY: PHOTO GALLERY & COUPLE PROFILE (EAST WING, y = 2.0)
@@ -514,9 +550,9 @@ export class HachiGarden3D {
     addPathSegment(10.25, 2.0, 8.0, 15.5, 4.2, 'z');
     addDestinationPlaza(18.0, 2.0, 8.0, 4.5, 20); // Gallery Viewing Plaza
 
-    // Branch to Couple Profile: from Central Promenade (x: 2.5) to Pavilion deck (x: 18.0, z: -6.0)
-    addPathSegment(10.25, 2.0, -6.0, 15.5, 4.2, 'z');
-    addDestinationPlaza(18.0, 2.0, -6.0, 4.5, 20); // Profile Pavilion Plaza
+    // Symmetrical East Branch to Couple Profile Pavilion (z = -4.0, matching Food Court West branch!)
+    // Runs cleanly from North Junction Hub (x: 2.5) dead-center into Pavilion deck edge (x: 14.4)
+    addPathSegment(8.45, 2.0, -4.0, 11.9, 4.0, 'z');
 
     // -------------------------------------------------------------
     // 6. PRIMARY GRAND PROMENADE: GRAND STAIRCASE & RESTAURANT FORECOURT (y = 5.0)
@@ -525,10 +561,10 @@ export class HachiGarden3D {
     // 12 steps, centered at x = 0, dz = -0.66, dy = 0.25, width = 7.2
     addStaircase(0, 2.12, -6.4, 12, 0, 0.25, -0.66, 7.2);
 
-    // 4 Grand Stone Lantern Pedestals flanking Grand Central Staircase
+    // 4 Grand Stone Lantern Pedestals flanking Grand Central Staircase (clear of z = -4.0 branch curbs)
     const lanternPedMat = new THREE.MeshLambertMaterial({ color: '#3a332a' });
     const lanternGlowMat = new THREE.MeshLambertMaterial({ color: '#ffe494', emissive: 0xffaa22 });
-    [[-4.2, 2.0, -6.0], [4.2, 2.0, -6.0], [-4.2, 5.0, -14.0], [4.2, 5.0, -14.0]].forEach(([lx, ly, lz]) => {
+    [[-4.2, 2.0, -6.5], [4.2, 2.0, -6.5], [-4.2, 5.0, -14.0], [4.2, 5.0, -14.0]].forEach(([lx, ly, lz]) => {
       const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.42, 1.2, 8), lanternPedMat);
       ped.position.set(lx, ly + 0.6, lz);
       this.group.add(ped);
@@ -709,27 +745,7 @@ export class HachiGarden3D {
     const woodFrameMat = new THREE.MeshLambertMaterial({ color: '#4a2c17' });
     const amberLightMat = new THREE.MeshLambertMaterial({ color: '#ffe28a', emissive: 0xaa6611 });
 
-    const lanternCoords = [
-      { x: -3.2, z: 28 },
-      { x: 3.2, z: 28 },
-      { x: -3.2, z: 18 },
-      { x: 3.2, z: 18 },
-      // Four corners of the cross junction (outside of walking paths)
-      { x: -3.4, z: 11.2 },
-      { x: 3.4, z: 11.2 },
-      { x: -3.4, z: 4.8 },
-      { x: 3.4, z: 4.8 },
-      // Pathway towards Grand Staircase
-      { x: -3.2, z: -3.5 },
-      { x: 3.2, z: -3.5 },
-      // Wing pathways (placed on edges, not in the center of walkway)
-      { x: -16.0, z: 10.5 },
-      { x: -16.0, z: -7.5 },
-      { x: 14.0, z: 10.5 },
-      { x: 14.0, z: -3.5 }
-    ];
-
-    lanternCoords.forEach(c => {
+    PATHWAY_LANTERN_COORDS.forEach(c => {
       const groundY = TerrainManager.getHeight(c.x, c.z);
       const lantern = new THREE.Group();
       lantern.position.set(c.x, groundY, c.z);
@@ -946,6 +962,11 @@ export class HachiGarden3D {
   }
 
   update(delta = 0.016) {
+    // Animate 3D Location Pin Landmark at Central Junction
+    if (this.locationPin) {
+      this.locationPin.update(delta);
+    }
+
     // Animate drifting clouds
     this.clouds.forEach((cloud, i) => {
       cloud.position.x += 0.03 * (i % 2 === 0 ? 1 : 0.8);

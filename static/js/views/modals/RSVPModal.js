@@ -46,7 +46,7 @@ export function createRSVPModal() {
 
     const introText = document.createElement('p');
     introText.style.cssText = 'font-size: 13px; color: #ffbe97; margin: 10px 0 0; line-height: 1.55;';
-    introText.textContent = 'Merupakan suatu kehormatan dan kebahagiaan bagi kami apabila Bapak/Ibu/Sahabat dapat hadir memberikan doa restu.';
+    introText.textContent = 'Kehadiran Bapak/Ibu/Sahabat akan jadi pelengkap kebahagiaan di hari spesial kami.';
 
     headerGroup.appendChild(guestNameEl);
     headerGroup.appendChild(policyBadge);
@@ -78,7 +78,7 @@ export function createRSVPModal() {
       statusDesc.style.cssText = 'font-size: 12.5px; color: #f0e8dc; margin: 0; line-height: 1.5;';
       statusDesc.textContent = confirmedAttending
         ? 'Kehadiran Anda sudah kami catat. Undangan ini berlaku untuk 1 orang.'
-        : 'Terima kasih sudah mengabarkan. Doa dan restu Anda sangat berarti bagi kami.';
+        : 'Terima kasih telah menjadi bagian dari kebahagiaan kami melalui doa yang diberikan.';
 
       statusCard.appendChild(statusTitle);
       statusCard.appendChild(statusDesc);
@@ -160,7 +160,7 @@ export function createRSVPModal() {
     `;
     detailBox.textContent = attending
       ? 'Konfirmasi berlaku untuk 1 orang tamu undangan.'
-      : 'Terima kasih atas doa restunya dari kejauhan.';
+      : 'Terima kasih telah menjadi bagian dari kebahagiaan kami melalui doa yang diberikan.';
     content.appendChild(detailBox);
 
     const resultBox = document.createElement('div');
@@ -188,12 +188,17 @@ export function createRSVPModal() {
       detailBox.style.background = 'rgba(255, 140, 140, 0.08)';
       detailBox.style.borderColor = 'rgba(255, 140, 140, 0.35)';
       detailBox.style.color = '#ffbebe';
-      detailBox.textContent = 'Terima kasih atas doa restunya dari kejauhan.';
+      detailBox.textContent = 'Terima kasih telah menjadi bagian dari kebahagiaan kami melalui doa yang diberikan.';
     });
 
+    let finishedDeclined = false;
     const submitBtn = createRetroButton({
       text: 'Simpan Konfirmasi',
       onClick: async () => {
+        if (finishedDeclined) {
+          gameState.setModal(null);
+          return;
+        }
         const finalCount = attending ? 1 : 0;
         submitBtn.disabled = true;
         submitBtn.innerText = 'Menyimpan...';
@@ -272,13 +277,11 @@ export function createRSVPModal() {
             resultBox.style.background = 'rgba(212, 175, 55, 0.2)';
             resultBox.style.border = '1px solid var(--color-gold)';
             resultBox.style.color = '#ffe4a0';
-            resultBox.innerHTML = '<strong>Terima Kasih Banyak!</strong><br>Konfirmasi Anda telah tersimpan.';
+            resultBox.innerHTML = '<strong>Terima Kasih Banyak!</strong><br>Terima kasih telah menjadi bagian dari kebahagiaan kami melalui doa yang diberikan.';
 
+            finishedDeclined = true;
             submitBtn.innerText = 'Kembali Jelajahi Kebun';
             submitBtn.disabled = false;
-            submitBtn.onclick = () => {
-              gameState.setModal(null);
-            };
           }
         } catch {
           resultBox.style.display = 'block';

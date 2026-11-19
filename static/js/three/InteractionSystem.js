@@ -3,11 +3,11 @@ import { gameState, MODALS, PHASES } from '../state/GameState.js';
 import { OUTDOOR_EXIT_SPAWN } from './CameraFraming.js';
 
 export const POI_REGISTRY_3D = [
-  { id: 'location', name: 'Pintu Masuk The Hachi Garden', x: 0, y: 0.0, z: 28, radius: 5.5, icon: '🌿', label: 'Waktu dan Lokasi Acara', modal: MODALS.LOCATION },
-  { id: 'profile', name: 'Profil Kami (Adjie & Daulika)', x: 18, y: 2.0, z: -6, radius: 5.8, icon: '💍', label: 'Profil Kami', modal: MODALS.PROFILE },
+  { id: 'location', name: 'Waktu & Lokasi Acara', x: 0, y: 2.0, z: 8, radius: 4.8, icon: '📍', label: 'Waktu dan Lokasi Acara', modal: MODALS.LOCATION },
+  { id: 'profile', name: 'Profil Kami (Adjie & Daulika)', x: 18, y: 2.0, z: -4, radius: 5.8, icon: '💍', label: 'Profil Kami', modal: MODALS.PROFILE },
   { id: 'gallery', name: 'Galeri Foto', x: 18, y: 2.0, z: 8, radius: 5.5, icon: '📸', label: 'Galeri Foto Kami', modal: MODALS.GALLERY },
   { id: 'listening', name: 'Listening Station', x: -24, y: 1.0, z: 8, radius: 6.2, icon: '🎧', label: 'Playlist Pilihan Kami', modal: MODALS.LISTENING },
-  { id: 'foodcourt', name: 'Cita Rasa Favorit Adjie & Daulika', x: -24, y: 3.2, z: -10, radius: 6.2, icon: '🍽️', label: 'Cita Rasa Favorit', modal: MODALS.FOODCOURT },
+  { id: 'foodcourt', name: 'Cita Rasa Favorit Adjie & Daulika', x: -24, y: 3.2, z: -8, radius: 6.4, icon: '🍽️', label: 'Cita Rasa Favorit', modal: MODALS.FOODCOURT },
   { id: 'rsvp', name: 'The Hachi Garden (Aula Acara)', x: 0, y: 5.0, z: -16.5, radius: 6.8, icon: '✉️', label: 'Konfirmasi Kehadiran', modal: MODALS.RSVP }
 ];
 
@@ -26,6 +26,9 @@ export class InteractionSystem {
     const flowerMat = new THREE.MeshLambertMaterial({ color: '#ff4d6d' });
 
     POI_REGISTRY_3D.forEach((poi) => {
+      // Location POI has its own dedicated 3D floating LocationPinLandmark & floor compass medallion
+      if (poi.id === 'location') return;
+
       const markerGroup = new THREE.Group();
       markerGroup.position.set(poi.x, (poi.y || 0) + 0.08, poi.z);
 

@@ -3,28 +3,38 @@ import * as THREE from 'three';
 export class FoodCourt {
   constructor() {
     this.group = new THREE.Group();
-    this.group.position.set(-24, 3.2, -10);
-    this.group.rotation.y = -Math.PI / 2;
+    this.group.position.set(-24, 3.2, -8.0);
+    // Face +X (East) toward the Forecourt Landing & Staircase 3 so entrance lanterns frame the approach
+    // and the serving counter sits cleanly along the back (-X) wall matching TerrainManager collision
+    this.group.rotation.y = Math.PI / 2;
+    this.walkableMesh = null;
     this.buildFoodCourt();
   }
 
   buildFoodCourt() {
     const woodMat = new THREE.MeshLambertMaterial({ color: '#4a2c17' });
+    const trimMat = new THREE.MeshLambertMaterial({ color: '#3b2414' });
     const floorMat = new THREE.MeshLambertMaterial({ color: '#7a624d' });
     const roofMat = new THREE.MeshLambertMaterial({ color: '#2b1b10' });
     const counterMat = new THREE.MeshLambertMaterial({ color: '#ded3c5' });
     const lampMat = new THREE.MeshLambertMaterial({ color: '#ffe28a', emissive: 0xbb7711 });
 
-    // 1. Raised Timber Deck (12m x 9m)
-    const deck = new THREE.Mesh(new THREE.BoxGeometry(12.0, 0.35, 9.0), floorMat);
-    deck.position.y = 0.17;
+    // 1. Raised Timber Deck (10.8m along Z x 9.0m along X) fitting cleanly between z = -13.4 and z = -2.6
+    const deckTrim = new THREE.Mesh(new THREE.BoxGeometry(11.04, 0.12, 9.24), trimMat);
+    deckTrim.position.y = 0.06;
+    this.group.add(deckTrim);
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(10.8, 0.18, 9.0), floorMat);
+    deck.position.y = 0.09;
+    deck.userData.walkableSurface = true;
     this.group.add(deck);
+    this.walkableMesh = deck;
 
     // 2. Tall Timber Support Columns (Height 4.8m so camera never clips into ceiling)
     const postGeo = new THREE.BoxGeometry(0.35, 4.8, 0.35);
     const postCoords = [
-      [-5.2, -3.8], [5.2, -3.8],
-      [-5.2, 3.8], [5.2, 3.8]
+      [-4.6, -3.8], [4.6, -3.8],
+      [-4.6, 3.8], [4.6, 3.8]
     ];
     postCoords.forEach(([px, pz]) => {
       const post = new THREE.Mesh(postGeo, woodMat);
@@ -33,7 +43,7 @@ export class FoodCourt {
     });
 
     // 3. Elevated Grand Joglo Pavilion Roof (starts at y = 4.8m, peak at y = 6.4m)
-    const roofGeo = new THREE.ConeGeometry(7.8, 2.2, 4);
+    const roofGeo = new THREE.ConeGeometry(7.2, 2.2, 4);
     const roof = new THREE.Mesh(roofGeo, roofMat);
     roof.rotation.y = Math.PI / 4;
     roof.position.set(0, 5.8, 0);
@@ -49,12 +59,12 @@ export class FoodCourt {
     board.position.set(0, 3.2, -3.7);
     this.group.add(board);
 
-    // 5. Dining Tables & Chairs placed on the left & right sides (leaving a 4.5m clear corridor)
+    // 5. Dining Tables & Chairs placed cleanly on the left & right sides (leaving a wide central corridor)
     const tableMat = new THREE.MeshLambertMaterial({ color: '#f5f0ea' });
     const chairMat = new THREE.MeshLambertMaterial({ color: '#6d4c41' });
 
-    [-3.8, 3.8].forEach(tx => {
-      const table = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.75, 12), tableMat);
+    [-3.3, 3.3].forEach(tx => {
+      const table = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.75, 12), tableMat);
       table.position.set(tx, 0.55, 0.8);
       this.group.add(table);
 
@@ -62,7 +72,7 @@ export class FoodCourt {
       for (let a = 0; a < 3; a++) {
         const ang = (a * Math.PI * 2) / 3;
         const chair = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.45, 0.35), chairMat);
-        chair.position.set(tx + Math.cos(ang) * 1.3, 0.4, 0.8 + Math.sin(ang) * 1.3);
+        chair.position.set(tx + Math.cos(ang) * 1.2, 0.4, 0.8 + Math.sin(ang) * 1.2);
         this.group.add(chair);
       }
     });

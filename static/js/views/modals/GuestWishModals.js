@@ -1,6 +1,10 @@
 import { createModal } from '../../ui/Modal.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
 import { gameState } from '../../state/GameState.js';
+import {
+  submitWishToFirestore,
+  fetchPublicWishesFromFirestore
+} from '../../firebase/firebaseClient.bundle.js';
 
 /**
  * Opens the "Kirim Doa & Ucapan" modal triggered by approaching Adjie & Daulika.
@@ -92,27 +96,11 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
       submitBtn.innerText = 'Mengirim...';
 
       try {
-        const res = await fetch('/api/wishes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sender_name: senderName || state.guestName || 'Tamu Undangan',
-            message,
-            visibility
-          })
+        await submitWishToFirestore({
+          sender_name: senderName || state.guestName || 'Tamu Undangan',
+          message,
+          visibility
         });
-
-        const data = await res.json();
-        if (!res.ok || data.status !== 'ok') {
-          feedbackEl.style.display = 'block';
-          feedbackEl.style.background = 'rgba(255, 70, 70, 0.16)';
-          feedbackEl.style.border = '1px solid #ff6666';
-          feedbackEl.style.color = '#ffb3b3';
-          feedbackEl.textContent = data.message || 'Gagal mengirim pesan. Silakan coba lagi.';
-          submitBtn.disabled = false;
-          submitBtn.innerText = 'Kirim Doa';
-          return;
-        }
 
         isSubmitted = true;
         feedbackEl.style.display = 'block';
@@ -142,12 +130,15 @@ export function openSendWishModal({ onCloseComplete = null } = {}) {
           readAfterBtn.style.marginTop = '8px';
           content.appendChild(readAfterBtn);
         }
-      } catch {
+      } catch (err) {
         feedbackEl.style.display = 'block';
         feedbackEl.style.background = 'rgba(255, 70, 70, 0.16)';
         feedbackEl.style.border = '1px solid #ff6666';
         feedbackEl.style.color = '#ffb3b3';
-        feedbackEl.textContent = 'Koneksi terputus saat mengirim doa. Silakan coba lagi.';
+        const rawMsg = err instanceof Error ? err.message : '';
+        feedbackEl.textContent = rawMsg.includes('Quota exceeded')
+          ? 'Batas harian penyimpanan tercapai. Silakan coba lagi besok ya.'
+          : 'Gagal mengirim doa ke server. Pastikan koneksi internet stabil lalu coba lagi.';
         submitBtn.disabled = false;
         submitBtn.innerText = 'Kirim Doa';
       }
@@ -301,11 +292,10 @@ export function openReadWishesModal({ onOpenSendWish = null, onCloseComplete = n
   const host = document.getElementById('ui-layer') || document.body;
   host.appendChild(backdrop);
 
-  // Lazy-fetch strictly on modal open
-  fetch('/api/wishes?page=1&limit=50&order=random')
-    .then((res) => (res.ok ? res.json() : { wishes: [] }))
-    .then((data) => {
-      wishes = Array.isArray(data.wishes) ? data.wishes : [];
+  // Lazy-fetch strictly on modal open from Firestore
+  fetchPublicWishesFromFirestore({ limitCount: 50, randomize: true })
+    .then((items) => {
+      wishes = Array.isArray(items) ? items : [];
       currentIndex = 0;
       renderCard();
     })

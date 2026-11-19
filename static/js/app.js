@@ -1,6 +1,7 @@
 import { gameState, PHASES } from './state/GameState.js';
 import { CoverView } from './views/CoverView.js';
 import { AvatarView } from './views/AvatarView.js';
+import { testConnection } from './firebase/firebaseClient.bundle.js';
 
 class App {
   constructor() {
@@ -56,6 +57,7 @@ class App {
 
   init() {
     console.log('Bootstrapping Wedding Invitation Application (Hachi Garden 3D)...');
+    void testConnection();
     gameState.subscribe((state) => this.render(state));
     this.render(gameState.getState());
   }

@@ -1,6 +1,10 @@
 import { createModal } from '../../ui/Modal.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
 import { gameState } from '../../state/GameState.js';
+import {
+  submitWishToFirestore,
+  fetchPublicWishesFromFirestore
+} from '../../firebase/firebaseClient.bundle.js';
 
 export function createWishesModal() {
   const state = gameState.getState();
@@ -69,36 +73,23 @@ export function createWishesModal() {
       };
 
       try {
-        const response = await fetch('/api/wishes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const resData = await response.json();
-
-        if (response.ok && resData.status === 'ok') {
-          wishInput.value = '';
-          counterEl.textContent = '0 / 500';
-          feedbackBanner.style.display = 'block';
-          feedbackBanner.style.background = 'rgba(60, 190, 100, 0.16)';
-          feedbackBanner.style.border = '1px solid #5ee085';
-          feedbackBanner.style.color = '#cbffda';
-          feedbackBanner.textContent = 'Terima kasih sudah menitipkan doa dan pesan untuk kami. ❤️';
-          loadWishes(wishesListContainer);
-        } else {
-          feedbackBanner.style.display = 'block';
-          feedbackBanner.style.background = 'rgba(255, 70, 70, 0.16)';
-          feedbackBanner.style.border = '1px solid #ff6666';
-          feedbackBanner.style.color = '#ffb3b3';
-          feedbackBanner.textContent = `Gagal mengirim ucapan: ${resData.message || 'Terjadi kesalahan.'}`;
-        }
+        await submitWishToFirestore(payload);
+        wishInput.value = '';
+        counterEl.textContent = '0 / 500';
+        feedbackBanner.style.display = 'block';
+        feedbackBanner.style.background = 'rgba(60, 190, 100, 0.16)';
+        feedbackBanner.style.border = '1px solid #5ee085';
+        feedbackBanner.style.color = '#cbffda';
+        feedbackBanner.textContent = visibility === 'PRIVATE'
+          ? 'Terima kasih sudah menitipkan doa! Pesan pribadimu tersimpan khusus untuk Adjie & Daulika. ❤️'
+          : 'Terima kasih sudah menitipkan doa dan pesan untuk kami. ❤️';
+        loadWishes(wishesListContainer);
       } catch {
         feedbackBanner.style.display = 'block';
         feedbackBanner.style.background = 'rgba(255, 70, 70, 0.16)';
         feedbackBanner.style.border = '1px solid #ff6666';
         feedbackBanner.style.color = '#ffb3b3';
-        feedbackBanner.textContent = 'Koneksi terputus saat mengirim ucapan. Silakan coba lagi.';
+        feedbackBanner.textContent = 'Gagal mengirim ucapan. Pastikan koneksi internet stabil lalu coba lagi.';
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerText = 'Kirim Doa';
@@ -122,15 +113,12 @@ export function createWishesModal() {
 async function loadWishes(container) {
   let wishes = [];
   try {
-    const res = await fetch('/api/wishes?page=1&limit=25');
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data.wishes)) {
-        wishes = data.wishes;
-      }
+    const items = await fetchPublicWishesFromFirestore({ limitCount: 30, randomize: false });
+    if (Array.isArray(items)) {
+      wishes = items;
     }
   } catch (e) {
-    console.warn('API wishes unavailable:', e);
+    console.warn('Firestore wishes unavailable:', e);
   }
 
   container.innerHTML = '';

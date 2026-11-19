@@ -1,0 +1,181 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Default-Deny Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidNumericId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 4 && id.matches('^[0-9]+$');
+    }
+
+    function isHighEntropyId(id) {
+      return id is string && id.size() >= 24 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email == 'adjieprasatia@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    function isValidWishBase(data) {
+      return data.sender_name is string
+        && data.sender_name.size() >= 1
+        && data.sender_name.size() <= 80
+        && data.message is string
+        && data.message.size() >= 1
+        && data.message.size() <= 500
+        && data.visibility is string
+        && (data.visibility == 'PUBLIC' || data.visibility == 'PRIVATE')
+        && data.moderation_status is string
+        && (data.moderation_status == 'PENDING' || data.moderation_status == 'APPROVED' || data.moderation_status == 'REJECTED')
+        && data.createdAt is timestamp;
+    }
+
+    function isValidWishCreate(data) {
+      return data.keys().hasAll(['sender_name', 'message', 'visibility', 'moderation_status', 'createdAt'])
+        && data.keys().hasOnly(['sender_name', 'message', 'visibility', 'moderation_status', 'createdAt'])
+        && isValidWishBase(data)
+        && data.createdAt == request.time
+        && (
+          (data.visibility == 'PUBLIC' && data.moderation_status == 'APPROVED') ||
+          (data.visibility == 'PRIVATE' && data.moderation_status == 'PENDING')
+        );
+    }
+
+    function isValidWishUpdate(data) {
+      return data.keys().hasAll(['sender_name', 'message', 'visibility', 'moderation_status', 'createdAt', 'moderatedAt'])
+        && data.keys().hasOnly(['sender_name', 'message', 'visibility', 'moderation_status', 'createdAt', 'moderatedAt'])
+        && isValidWishBase(data)
+        && data.moderatedAt is timestamp
+        && data.moderatedAt == request.time;
+    }
+
+    function isValidRsvpBase(data) {
+      return data.guest_name is string
+        && data.guest_name.size() >= 1
+        && data.guest_name.size() <= 100
+        && data.attending is bool
+        && data.guest_count is int
+        && data.rsvp_status is string
+        && data.invitation_category is string
+        && data.invitation_category == 'B'
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && (
+          (data.attending == true && data.guest_count == 1 && data.rsvp_status == 'WILL_ATTEND') ||
+          (data.attending == false && data.guest_count == 0 && data.rsvp_status == 'DECLINED')
+        );
+    }
+
+    function isValidRsvpCreate(data) {
+      return data.keys().hasAll(['guest_name', 'attending', 'guest_count', 'rsvp_status', 'invitation_category', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['guest_name', 'attending', 'guest_count', 'rsvp_status', 'invitation_category', 'createdAt', 'updatedAt'])
+        && isValidRsvpBase(data)
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function isValidRsvpUpdate(data) {
+      return data.keys().hasAll(['guest_name', 'attending', 'guest_count', 'rsvp_status', 'invitation_category', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['guest_name', 'attending', 'guest_count', 'rsvp_status', 'invitation_category', 'createdAt', 'updatedAt'])
+        && isValidRsvpBase(data)
+        && data.updatedAt == request.time;
+    }
+
+    function isValidGuestOverride(data) {
+      return data.keys().hasAll(['no', 'guest_name', 'updatedAt'])
+        && data.keys().hasOnly(['no', 'guest_name', 'updatedAt'])
+        && data.no is int
+        && data.no >= 1
+        && data.no <= 500
+        && data.guest_name is string
+        && data.guest_name.size() >= 1
+        && data.guest_name.size() <= 100
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    match /wishes/{wishId} {
+      allow get: if isValidId(wishId) && (
+        (existing().visibility == 'PUBLIC' && existing().moderation_status == 'APPROVED') ||
+        isAdmin()
+      );
+      allow list: if (resource.data.visibility == 'PUBLIC' && resource.data.moderation_status == 'APPROVED')
+        || isAdmin();
+      allow create: if isValidId(wishId) && isValidWishCreate(incoming());
+      allow update: if isValidWishUpdate(incoming())
+        && isValidId(wishId)
+        && isAdmin()
+        && incoming().createdAt == existing().createdAt
+        && incoming().sender_name == existing().sender_name
+        && incoming().message == existing().message
+        && incoming().visibility == existing().visibility
+        && incoming().diff(existing()).affectedKeys().hasOnly(['moderation_status', 'moderatedAt']);
+      allow delete: if isAdmin() && isValidId(wishId);
+    }
+
+    match /rsvps/{rsvpId} {
+      allow get: if isAdmin() && isValidId(rsvpId);
+      allow list: if isAdmin();
+      allow create: if isHighEntropyId(rsvpId) && isValidRsvpCreate(incoming());
+      allow update: if isValidRsvpUpdate(incoming())
+        && isHighEntropyId(rsvpId)
+        && incoming().createdAt == existing().createdAt
+        && incoming().invitation_category == existing().invitation_category
+        && (
+          isAdmin() ||
+          (
+            incoming().guest_name == existing().guest_name &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'attending',
+              'guest_count',
+              'rsvp_status',
+              'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isAdmin() && isValidId(rsvpId);
+    }
+
+    match /guest_overrides/{guestNo} {
+      allow get: if isAdmin() && isValidNumericId(guestNo);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidNumericId(guestNo)
+        && isValidGuestOverride(incoming())
+        && int(guestNo) == incoming().no;
+      allow update: if isValidGuestOverride(incoming())
+        && isAdmin()
+        && isValidNumericId(guestNo)
+        && int(guestNo) == incoming().no
+        && incoming().no == existing().no
+        && incoming().diff(existing()).affectedKeys().hasOnly(['guest_name', 'updatedAt']);
+      allow delete: if isAdmin() && isValidNumericId(guestNo);
+    }
+
+    match /admins/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid && isValidId(uid);
+      allow list, create, update, delete: if false;
+    }
+  }
+}

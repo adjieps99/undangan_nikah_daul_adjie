@@ -226,29 +226,20 @@ export class TextureFactory {
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 6;
 
-    // Metallic gold vertical gradient
-    const goldGrad = ctx.createLinearGradient(0, 40, 0, 160);
+    // Metallic gold vertical gradient centered for "THE HACHI"
+    const goldGrad = ctx.createLinearGradient(0, height * 0.24, 0, height * 0.76);
     goldGrad.addColorStop(0, '#fffbe6');
     goldGrad.addColorStop(0.35, '#f5d77f');
     goldGrad.addColorStop(0.7, '#d4af37');
     goldGrad.addColorStop(1, '#8f6814');
 
-    ctx.font = 'bold 92px "Cinzel", "Georgia", "Times New Roman", serif';
+    ctx.font = 'bold 104px "Cinzel", "Georgia", "Times New Roman", serif';
     ctx.fillStyle = goldGrad;
     ctx.letterSpacing = '14px';
-    ctx.fillText('THE HACHI', width / 2, 104);
-
-    // Reset shadow for crisp subtitle
-    ctx.shadowBlur = 6;
-    ctx.shadowOffsetY = 3;
-
-    // Subtitle: "GARDEN WEDDING VENUE"
-    ctx.font = 'bold 26px "Cinzel", "Georgia", "Times New Roman", serif';
-    ctx.fillStyle = '#e8c97e';
-    ctx.letterSpacing = '8px';
-    ctx.fillText('GARDEN WEDDING VENUE', width / 2, 186);
+    ctx.fillText('THE HACHI', width / 2, height / 2 + 4);
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
     texture.anisotropy = 4;
     return texture;
   }

@@ -53,7 +53,7 @@ export const WEDDING_DATA = {
       name: 'Martabak San Fransisco',
       ownerLabel: 'Favorit Daulika',
       city: 'Bandung',
-      mustTry: ['Martabak Ayam', 'Martabak Sapi Telur Asin'],
+      mustTry: ['Martabak Ayam', 'Martabak 1/2 Coklat 1/2 Keju'],
       note: 'Kalau lagi pengen yang gurih, Martabak Ayam bisa jadi pilihan. Kuliner legend kota Bandung ini masih jadi Martabak terbaik versi Daul.',
       mapsUrl: 'https://share.google/67KGEGQkmw9iKx4Og'
     },
@@ -69,7 +69,7 @@ export const WEDDING_DATA = {
       name: 'Spesial Soto Boyolali (SSB) Hj Hesti',
       ownerLabel: 'Favorit Bersama',
       city: '',
-      mustTry: ['Soto Ayam Kampung', 'Soto Daging', 'Gorengan sebagai pendamping'],
+      mustTry: ['Soto Ayam Kampung campur', 'Tempe Kering', 'Sate Kulit', 'Bakwan'],
       note: 'Comfort food kami sepulang kantor. Dua mangkuk soto dan berbagai macam gorengan yang bikin kami selalu balik kesini.',
       mapsUrl: 'https://share.google/e4QDt7v5I2z7pVBXG'
     },
@@ -77,7 +77,7 @@ export const WEDDING_DATA = {
       name: "Scarlett's House",
       ownerLabel: 'Tempat Favorit Lainnya',
       city: '',
-      mustTry: ['Original Poured Tiramisu', 'Doenjang Carbonara'],
+      mustTry: ['Dark Chocolate Salt Bread', 'Basil Pesto Lasagna', 'Mixberries Pistachio Tart'],
       note: 'Masih jadi favorite kami untuk makan sambil ngobrol lama. Interior dan brandingnya masih juara. Cuma sabar buat antri ya :)',
       mapsUrl: 'https://share.google/gzmH8GyjamnXyv1vr'
     },
@@ -85,7 +85,7 @@ export const WEDDING_DATA = {
       name: 'Seafood Ayu',
       ownerLabel: 'Tempat Favorit Lainnya',
       city: '',
-      mustTry: ['Ikan Kuwe Bakar', 'Cumi Goreng Tepung', 'Cumi Saus Padang'],
+      mustTry: ['Cumi Tepung Saos Padang', 'Ikan Kue Bakar', 'Tumis Kangkung'],
       note: 'Kalau pengen makan kenyang kami suka dateng kesini. Rekomendasi juga kalau mau makan bareng keluarga. Kami selalu order repeat ikan bakar & cumi tepungnya!',
       mapsUrl: 'https://share.google/XpDKQXd4eWo4Cg3cm'
     },

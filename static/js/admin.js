@@ -1,10 +1,22 @@
-const TOKEN_KEY = 'hachi_admin_session_token';
+import {
+  ADMIN_EMAIL,
+  isVerifiedAdminUser,
+  signInAdminWithGoogle,
+  signOutAdmin,
+  subscribeAdminAuth,
+  subscribeAdminWishes,
+  subscribeAdminRsvps,
+  subscribeAdminGuestOverrides,
+  moderateWishInFirestore,
+  deleteWishInFirestore,
+  saveGuestOverrideInFirestore
+} from './firebase/firebaseClient.bundle.js';
 
 const loginSection = document.getElementById('admin-login-section');
 const dashboardSection = document.getElementById('admin-dashboard-section');
-const loginForm = document.getElementById('admin-login-form');
-const accessKeyInput = document.getElementById('admin-access-key');
+const googleLoginBtn = document.getElementById('admin-google-login-btn');
 const loginError = document.getElementById('admin-login-error');
+const adminUserEmailEl = document.getElementById('admin-user-email');
 const logoutBtn = document.getElementById('admin-logout-btn');
 
 const tabInvBtn = document.getElementById('tab-invitations');
@@ -42,20 +54,12 @@ const toastEl = document.getElementById('admin-toast');
 let toastTimer = null;
 let currentBaseUrl = window.location.origin;
 
-function getToken() {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY) || '';
-  } catch {
-    return '';
-  }
-}
-
-function setToken(token) {
-  try {
-    if (token) sessionStorage.setItem(TOKEN_KEY, token);
-    else sessionStorage.removeItem(TOKEN_KEY);
-  } catch {}
-}
+let baseGuests = [];
+let guestOverrides = {};
+let allRsvps = [];
+let allWishes = [];
+let activeUnsubscribers = [];
+let pendingDeleteWishId = null;
 
 function showToast(msg) {
   toastEl.textContent = msg;
@@ -63,7 +67,7 @@ function showToast(msg) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => {
     toastEl.classList.add('hidden');
-  }, 3000);
+  }, 3200);
 }
 
 async function copyText(text, successMsg) {
@@ -75,22 +79,17 @@ async function copyText(text, successMsg) {
   }
 }
 
-async function adminFetch(url, options = {}) {
-  const token = getToken();
-  const headers = {
-    ...(options.headers || {}),
-    Authorization: `Bearer ${token}`
-  };
-  const res = await fetch(url, { ...options, headers });
-  if (res.status === 401) {
-    setToken('');
-    showLoginScreen('Sesi berakhir. Silakan masuk kembali.');
-    throw new Error('Unauthorized');
+function cleanupListeners() {
+  for (const unsub of activeUnsubscribers) {
+    try {
+      if (typeof unsub === 'function') unsub();
+    } catch {}
   }
-  return res;
+  activeUnsubscribers = [];
 }
 
 function showLoginScreen(errMsg = '') {
+  cleanupListeners();
   dashboardSection.classList.add('hidden');
   loginSection.classList.remove('hidden');
   if (errMsg) {
@@ -99,14 +98,6 @@ function showLoginScreen(errMsg = '') {
   } else {
     loginError.classList.add('hidden');
   }
-}
-
-function showDashboard() {
-  loginSection.classList.add('hidden');
-  dashboardSection.classList.remove('hidden');
-  updateQuickLinkPreview();
-  loadGuests();
-  loadWishes();
 }
 
 function formatDate(iso) {
@@ -119,6 +110,14 @@ function formatDate(iso) {
   } catch {
     return iso;
   }
+}
+
+function normalizeGuestKey(name) {
+  return String(name || '')
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
 }
 
 function buildPersonalLink(baseUrl, guestName) {
@@ -138,12 +137,75 @@ function buildWhatsAppShareUrl(guestName, invitationUrl) {
   return `https://wa.me/?text=${encodeURIComponent(msg)}`;
 }
 
+function escapeCsvCell(value) {
+  let str = value === null || value === undefined ? '' : String(value);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = `'${str}`;
+  }
+  if (/[",\r\n]/.test(str)) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 function updateQuickLinkPreview() {
   const name = quickGuestNameInput.value.trim();
   const url = buildPersonalLink(currentBaseUrl, name);
   quickLinkPreview.textContent = url;
   quickWaBtn.href = buildWhatsAppShareUrl(name, url);
   quickPreviewBtn.href = name ? `/?to=${encodeURIComponent(name)}` : '/';
+}
+
+function createBadge(text, cls) {
+  const span = document.createElement('span');
+  span.className = `badge ${cls}`;
+  span.textContent = text;
+  return span;
+}
+
+function computeMergedGuests() {
+  const latestRsvpByName = new Map();
+  for (const r of allRsvps) {
+    latestRsvpByName.set(normalizeGuestKey(r.guest_name), r);
+  }
+
+  const matchedKeys = new Set();
+  const rows = baseGuests.map((entry) => {
+    const currentName = guestOverrides[String(entry.no)] || entry.name;
+    const key = normalizeGuestKey(currentName);
+    const matchedRsvp = latestRsvpByName.get(key) || latestRsvpByName.get(normalizeGuestKey(entry.name)) || null;
+    if (matchedRsvp) {
+      matchedKeys.add(normalizeGuestKey(matchedRsvp.guest_name));
+    }
+    const rsvpStatus = matchedRsvp ? matchedRsvp.rsvp_status : 'PENDING';
+    return {
+      no: entry.no,
+      is_extra: false,
+      original_name: entry.name,
+      guest_name: currentName,
+      invitation_url: buildPersonalLink(currentBaseUrl, currentName),
+      rsvp_status: rsvpStatus,
+      guest_capacity: 1,
+      confirmed_at: matchedRsvp ? (matchedRsvp.updated_at || matchedRsvp.created_at) : null
+    };
+  });
+
+  let extraCounter = 1;
+  for (const [key, rsvp] of latestRsvpByName.entries()) {
+    if (matchedKeys.has(key)) continue;
+    rows.push({
+      no: `E${extraCounter++}`,
+      is_extra: true,
+      original_name: rsvp.guest_name,
+      guest_name: rsvp.guest_name,
+      invitation_url: buildPersonalLink(currentBaseUrl, rsvp.guest_name),
+      rsvp_status: rsvp.rsvp_status,
+      guest_capacity: 1,
+      confirmed_at: rsvp.updated_at || rsvp.created_at
+    });
+  }
+
+  return rows;
 }
 
 function renderGuestStats(summary) {
@@ -164,16 +226,29 @@ function renderGuestStats(summary) {
   }
 }
 
-function createBadge(text, cls) {
-  const span = document.createElement('span');
-  span.className = `badge ${cls}`;
-  span.textContent = text;
-  return span;
-}
+function renderGuestsView() {
+  const all = computeMergedGuests();
+  const summary = {
+    total: all.length,
+    confirmed: all.filter((g) => g.rsvp_status === 'WILL_ATTEND').length,
+    declined: all.filter((g) => g.rsvp_status === 'DECLINED').length,
+    pending: all.filter((g) => g.rsvp_status === 'PENDING').length
+  };
+  renderGuestStats(summary);
 
-function renderGuestsTable(guests) {
+  const search = invSearch.value.trim().toLowerCase();
+  const status = invStatusFilter.value;
+  const filtered = all.filter((g) => {
+    if (status !== 'ALL' && g.rsvp_status !== status) return false;
+    if (search) {
+      const hay = `${g.no} ${g.guest_name} ${g.original_name}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
   invTableBody.innerHTML = '';
-  if (!guests || guests.length === 0) {
+  if (filtered.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 5;
@@ -184,15 +259,13 @@ function renderGuestsTable(guests) {
     return;
   }
 
-  for (const guest of guests) {
+  for (const guest of filtered) {
     const tr = document.createElement('tr');
 
-    // 1. No
     const tdNo = document.createElement('td');
     tdNo.textContent = String(guest.no);
     tr.appendChild(tdNo);
 
-    // 2. Nama Tamu
     const tdName = document.createElement('td');
     const nameStrong = document.createElement('div');
     nameStrong.style.fontWeight = '600';
@@ -200,7 +273,12 @@ function renderGuestsTable(guests) {
     nameStrong.textContent = guest.guest_name;
     tdName.appendChild(nameStrong);
 
-    if (guest.guest_name !== guest.original_name) {
+    if (guest.is_extra) {
+      const extraTag = document.createElement('div');
+      extraTag.style.marginTop = '4px';
+      extraTag.appendChild(createBadge('Link Cepat / Tambahan', 'badge-review'));
+      tdName.appendChild(extraTag);
+    } else if (guest.guest_name !== guest.original_name) {
       const origNote = document.createElement('div');
       origNote.className = 'muted';
       origNote.style.fontSize = '11px';
@@ -209,7 +287,6 @@ function renderGuestsTable(guests) {
     }
     tr.appendChild(tdName);
 
-    // 3. Link Undangan Personal (?to=...)
     const tdLink = document.createElement('td');
     const linkBox = document.createElement('div');
     linkBox.className = 'link-box';
@@ -217,7 +294,6 @@ function renderGuestsTable(guests) {
     tdLink.appendChild(linkBox);
     tr.appendChild(tdLink);
 
-    // 4. RSVP Status
     const tdStatus = document.createElement('td');
     if (guest.rsvp_status === 'WILL_ATTEND') {
       tdStatus.appendChild(createBadge('Akan hadir (1 orang)', 'badge-attend'));
@@ -236,7 +312,6 @@ function renderGuestsTable(guests) {
     }
     tr.appendChild(tdStatus);
 
-    // 5. Action
     const tdAct = document.createElement('td');
     const actRow = document.createElement('div');
     actRow.className = 'actions-row';
@@ -264,38 +339,23 @@ function renderGuestsTable(guests) {
     waLink.rel = 'noopener noreferrer';
     waLink.textContent = 'WhatsApp';
 
-    const editBtn = document.createElement('button');
-    editBtn.type = 'button';
-    editBtn.className = 'btn btn-secondary btn-sm';
-    editBtn.textContent = 'Edit';
-    editBtn.setAttribute('aria-label', `Edit nama ${guest.guest_name}`);
-    editBtn.addEventListener('click', () => openEditGuestModal(guest));
-
     actRow.appendChild(copyBtn);
     actRow.appendChild(waLink);
     actRow.appendChild(previewLink);
-    actRow.appendChild(editBtn);
+
+    if (!guest.is_extra) {
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'btn btn-secondary btn-sm';
+      editBtn.textContent = 'Edit';
+      editBtn.setAttribute('aria-label', `Edit nama ${guest.guest_name}`);
+      editBtn.addEventListener('click', () => openEditGuestModal(guest));
+      actRow.appendChild(editBtn);
+    }
+
     tdAct.appendChild(actRow);
     tr.appendChild(tdAct);
-
     invTableBody.appendChild(tr);
-  }
-}
-
-async function loadGuests() {
-  const params = new URLSearchParams({
-    search: invSearch.value.trim(),
-    status: invStatusFilter.value
-  });
-  const res = await adminFetch(`/api/admin/guests?${params.toString()}`);
-  const data = await res.json();
-  if (data.status === 'ok') {
-    if (data.base_url) {
-      currentBaseUrl = data.base_url;
-      updateQuickLinkPreview();
-    }
-    renderGuestStats(data.summary);
-    renderGuestsTable(data.guests);
   }
 }
 
@@ -330,9 +390,32 @@ function renderWishStats(summary) {
   }
 }
 
-function renderWishesTable(wishes) {
+function renderWishesView() {
+  const summary = {
+    total: allWishes.length,
+    pending: allWishes.filter((w) => w.moderation_status === 'PENDING').length,
+    approved: allWishes.filter((w) => w.moderation_status === 'APPROVED').length,
+    rejected: allWishes.filter((w) => w.moderation_status === 'REJECTED').length,
+    private_count: allWishes.filter((w) => w.visibility === 'PRIVATE').length
+  };
+  renderWishStats(summary);
+
+  const search = wishSearch.value.trim().toLowerCase();
+  const status = wishStatusFilter.value;
+  const visibility = wishVisFilter.value;
+
+  const filtered = allWishes.filter((w) => {
+    if (status !== 'ALL' && w.moderation_status !== status) return false;
+    if (visibility !== 'ALL' && w.visibility !== visibility) return false;
+    if (search) {
+      const hay = `${w.sender_name} ${w.message}`.toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+
   wishTableBody.innerHTML = '';
-  if (!wishes || wishes.length === 0) {
+  if (filtered.length === 0) {
     const tr = document.createElement('tr');
     const td = document.createElement('td');
     td.colSpan = 6;
@@ -343,7 +426,7 @@ function renderWishesTable(wishes) {
     return;
   }
 
-  for (const wish of wishes) {
+  for (const wish of filtered) {
     const tr = document.createElement('tr');
 
     const tdSender = document.createElement('td');
@@ -400,8 +483,20 @@ function renderWishesTable(wishes) {
     rejectBtn.disabled = wish.moderation_status === 'REJECTED';
     rejectBtn.addEventListener('click', () => handleModerateWish(wish.id, 'REJECT'));
 
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn btn-secondary btn-sm';
+    const isConfirming = pendingDeleteWishId === wish.id;
+    deleteBtn.textContent = isConfirming ? 'Yakin Hapus?' : 'Hapus';
+    if (isConfirming) {
+      deleteBtn.style.borderColor = '#e05a5a';
+      deleteBtn.style.color = '#ffb2b2';
+    }
+    deleteBtn.addEventListener('click', () => handleDeleteWish(wish.id));
+
     row.appendChild(approveBtn);
     row.appendChild(rejectBtn);
+    row.appendChild(deleteBtn);
     tdAct.appendChild(row);
     tr.appendChild(tdAct);
 
@@ -410,60 +505,113 @@ function renderWishesTable(wishes) {
 }
 
 async function handleModerateWish(id, action) {
-  const res = await adminFetch(`/api/admin/wishes/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action })
-  });
-  const data = await res.json();
-  if (res.ok && data.status === 'ok') {
-    showToast(action === 'APPROVE' ? 'Ucapan disetujui.' : 'Ucapan ditolak.');
-    loadWishes();
-  }
-}
-
-async function loadWishes() {
-  const params = new URLSearchParams({
-    search: wishSearch.value.trim(),
-    status: wishStatusFilter.value,
-    visibility: wishVisFilter.value
-  });
-  const res = await adminFetch(`/api/admin/wishes?${params.toString()}`);
-  const data = await res.json();
-  if (data.status === 'ok') {
-    renderWishStats(data.summary);
-    renderWishesTable(data.wishes);
-  }
-}
-
-// Event Listeners
-loginForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  loginError.classList.add('hidden');
-  const accessKey = accessKeyInput.value;
   try {
-    const res = await fetch('/api/admin/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ access_key: accessKey })
-    });
-    const data = await res.json();
-    if (!res.ok || data.status !== 'ok' || !data.token) {
-      loginError.textContent = data.message || 'Kode akses tidak valid.';
-      loginError.classList.remove('hidden');
-      return;
-    }
-    setToken(data.token);
-    accessKeyInput.value = '';
-    showDashboard();
+    await moderateWishInFirestore(id, action);
+    showToast(action === 'APPROVE' ? 'Ucapan disetujui.' : 'Ucapan disembunyikan.');
   } catch {
-    loginError.textContent = 'Gagal terhubung ke server.';
-    loginError.classList.remove('hidden');
+    showToast('Gagal memperbarui status ucapan.');
+  }
+}
+
+async function handleDeleteWish(id) {
+  if (pendingDeleteWishId !== id) {
+    pendingDeleteWishId = id;
+    renderWishesView();
+    return;
+  }
+  pendingDeleteWishId = null;
+  try {
+    await deleteWishInFirestore(id);
+    showToast('Ucapan dihapus permanen.');
+  } catch {
+    showToast('Gagal menghapus ucapan.');
+  }
+}
+
+async function fetchBaseGuestsList(user) {
+  try {
+    const idToken = await user.getIdToken();
+    const res = await fetch('/api/admin/base-guests', {
+      headers: { Authorization: `Bearer ${idToken}` }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.status === 'ok' && Array.isArray(data.guests)) {
+      baseGuests = data.guests;
+      if (data.base_url) {
+        currentBaseUrl = data.base_url;
+        updateQuickLinkPreview();
+      }
+      renderGuestsView();
+    }
+  } catch (err) {
+    console.warn('Gagal memuat daftar dasar 153 tamu:', err);
+  }
+}
+
+function startAdminDashboard(user) {
+  cleanupListeners();
+  loginSection.classList.add('hidden');
+  dashboardSection.classList.remove('hidden');
+  if (adminUserEmailEl) {
+    adminUserEmailEl.textContent = `Masuk sebagai ${user.email} • Terhubung ke Firebase Firestore`;
+  }
+  updateQuickLinkPreview();
+
+  void fetchBaseGuestsList(user);
+
+  const onFirestoreErr = () => {
+    showToast('Terjadi kendala membaca data Firestore. Coba muat ulang halaman.');
+  };
+
+  activeUnsubscribers.push(
+    subscribeAdminGuestOverrides((overrides) => {
+      guestOverrides = overrides;
+      renderGuestsView();
+    }, onFirestoreErr)
+  );
+
+  activeUnsubscribers.push(
+    subscribeAdminRsvps((rsvps) => {
+      allRsvps = rsvps;
+      renderGuestsView();
+    }, onFirestoreErr)
+  );
+
+  activeUnsubscribers.push(
+    subscribeAdminWishes((wishes) => {
+      allWishes = wishes;
+      renderWishesView();
+    }, onFirestoreErr)
+  );
+}
+
+googleLoginBtn.addEventListener('click', async () => {
+  loginError.classList.add('hidden');
+  googleLoginBtn.disabled = true;
+  try {
+    const user = await signInAdminWithGoogle();
+    if (!isVerifiedAdminUser(user)) {
+      await signOutAdmin();
+      showLoginScreen(`Akun ${user?.email || ''} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAIL}.`);
+    }
+  } catch (err) {
+    const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
+    if (code === 'auth/popup-closed-by-user') {
+      showLoginScreen('Login dibatalkan.');
+    } else if (code === 'auth/popup-blocked') {
+      showLoginScreen('Popup login diblokir browser. Izinkan popup untuk halaman ini lalu coba lagi.');
+    } else {
+      showLoginScreen('Gagal masuk dengan Google. Pastikan koneksi internet stabil lalu coba lagi.');
+    }
+  } finally {
+    googleLoginBtn.disabled = false;
   }
 });
 
-logoutBtn.addEventListener('click', () => {
-  setToken('');
+logoutBtn.addEventListener('click', async () => {
+  cleanupListeners();
+  await signOutAdmin();
   showLoginScreen();
 });
 
@@ -472,7 +620,7 @@ tabInvBtn.addEventListener('click', () => {
   tabWishBtn.classList.remove('active');
   panelInv.classList.remove('hidden');
   panelWish.classList.add('hidden');
-  loadGuests();
+  renderGuestsView();
 });
 
 tabWishBtn.addEventListener('click', () => {
@@ -480,7 +628,7 @@ tabWishBtn.addEventListener('click', () => {
   tabInvBtn.classList.remove('active');
   panelWish.classList.remove('hidden');
   panelInv.classList.add('hidden');
-  loadWishes();
+  renderWishesView();
 });
 
 quickGuestNameInput.addEventListener('input', updateQuickLinkPreview);
@@ -490,67 +638,79 @@ quickCopyBtn.addEventListener('click', () => {
   copyText(url, name ? `Link untuk ${name} disalin.` : 'Link undangan utama disalin.');
 });
 
-invSearch.addEventListener('input', () => loadGuests());
-invStatusFilter.addEventListener('change', () => loadGuests());
+invSearch.addEventListener('input', () => renderGuestsView());
+invStatusFilter.addEventListener('change', () => renderGuestsView());
 
-invExportBtn.addEventListener('click', async () => {
-  invExportBtn.disabled = true;
-  try {
-    const res = await adminFetch('/api/admin/guests/export.csv');
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'daftar-undangan-adjie-daulika.csv';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    showToast('File CSV daftar undangan berhasil diunduh.');
-  } finally {
-    invExportBtn.disabled = false;
+invExportBtn.addEventListener('click', () => {
+  const guests = computeMergedGuests();
+  const statusLabel = (s) => {
+    if (s === 'WILL_ATTEND') return 'Akan hadir';
+    if (s === 'DECLINED') return 'Tidak dapat hadir';
+    return 'Belum merespons';
+  };
+
+  const lines = [
+    ['No', 'Nama Tamu', 'Link Undangan', 'RSVP Status', 'Kapasitas', 'Waktu Konfirmasi'].join(',')
+  ];
+
+  for (const g of guests) {
+    lines.push(
+      [
+        escapeCsvCell(g.no),
+        escapeCsvCell(g.guest_name),
+        escapeCsvCell(g.invitation_url),
+        escapeCsvCell(statusLabel(g.rsvp_status)),
+        escapeCsvCell(1),
+        escapeCsvCell(g.confirmed_at || '')
+      ].join(',')
+    );
   }
+
+  const blob = new Blob([`\uFEFF${lines.join('\r\n')}`], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'daftar-undangan-adjie-daulika.csv';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('File CSV daftar undangan berhasil diunduh.');
 });
 
 editCancelBtn.addEventListener('click', closeEditGuestModal);
 editForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  const no = editNoInput.value;
-  const res = await adminFetch(`/api/admin/guests/${no}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      guest_name: editNameInput.value.trim()
-    })
-  });
-  const data = await res.json();
-  if (res.ok && data.status === 'ok') {
+  const no = Number.parseInt(editNoInput.value, 10);
+  const nextName = editNameInput.value.trim();
+  if (!nextName || Number.isNaN(no)) return;
+  try {
+    await saveGuestOverrideInFirestore(no, nextName);
     closeEditGuestModal();
-    showToast('Nama tamu diperbarui.');
-    loadGuests();
+    showToast('Nama tamu disimpan ke Firestore.');
+  } catch {
+    showToast('Gagal menyimpan perubahan nama tamu.');
   }
 });
 
-wishSearch.addEventListener('input', () => loadWishes());
-wishStatusFilter.addEventListener('change', () => loadWishes());
-wishVisFilter.addEventListener('change', () => loadWishes());
-wishRefreshBtn.addEventListener('click', () => loadWishes());
+wishSearch.addEventListener('input', () => renderWishesView());
+wishStatusFilter.addEventListener('change', () => renderWishesView());
+wishVisFilter.addEventListener('change', () => renderWishesView());
+wishRefreshBtn.addEventListener('click', () => {
+  renderWishesView();
+  showToast('Data ucapan sudah tersinkron real-time dengan Firestore.');
+});
 
-// Bootstrap session
-(async function init() {
-  const existing = getToken();
-  if (!existing) {
+subscribeAdminAuth(async (user) => {
+  if (!user) {
     showLoginScreen();
     return;
   }
-  try {
-    const res = await adminFetch('/api/admin/auth/me');
-    if (res.ok) {
-      showDashboard();
-    } else {
-      showLoginScreen();
-    }
-  } catch {
-    showLoginScreen();
+  if (!isVerifiedAdminUser(user)) {
+    const email = user.email || 'akun ini';
+    await signOutAdmin();
+    showLoginScreen(`Akun ${email} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAIL}.`);
+    return;
   }
-})();
+  startAdminDashboard(user);
+});

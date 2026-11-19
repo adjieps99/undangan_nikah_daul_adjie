@@ -348,10 +348,108 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // ==========================================
+// FIREBASE ID TOKEN VERIFICATION (RS256 via Google Public Certs — zero firebase-admin)
+// ==========================================
+const FIREBASE_CONFIG_PATH = path.join(__dirname, 'firebase-applet-config.json');
+let FIREBASE_PROJECT_ID = '';
+try {
+  if (fs.existsSync(FIREBASE_CONFIG_PATH)) {
+    const parsedCfg = JSON.parse(fs.readFileSync(FIREBASE_CONFIG_PATH, 'utf8')) as { projectId?: string };
+    FIREBASE_PROJECT_ID = typeof parsedCfg.projectId === 'string' ? parsedCfg.projectId : '';
+  }
+} catch {}
+
+const ADMIN_ALLOWED_EMAIL = 'adjieprasatia@gmail.com';
+const GOOGLE_CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
+let cachedGoogleCerts: Record<string, string> = {};
+let cachedCertsExpiresAt = 0;
+
+async function getGooglePublicCerts(): Promise<Record<string, string>> {
+  const now = Date.now();
+  if (now < cachedCertsExpiresAt && Object.keys(cachedGoogleCerts).length > 0) {
+    return cachedGoogleCerts;
+  }
+  const resp = await fetch(GOOGLE_CERTS_URL);
+  if (!resp.ok) {
+    throw new Error(`Failed to fetch Google x509 certs: ${resp.status}`);
+  }
+  const certs = (await resp.json()) as Record<string, string>;
+  const cacheControl = resp.headers.get('cache-control') || '';
+  const maxAgeMatch = /max-age=(\d+)/i.exec(cacheControl);
+  const maxAgeSec = maxAgeMatch ? Number.parseInt(maxAgeMatch[1], 10) : 3600;
+  cachedGoogleCerts = certs;
+  cachedCertsExpiresAt = now + Math.max(60, maxAgeSec) * 1000;
+  return certs;
+}
+
+async function verifyFirebaseAdminIdToken(idToken: string | null): Promise<boolean> {
+  if (!idToken || !FIREBASE_PROJECT_ID) return false;
+  const parts = idToken.trim().split('.');
+  if (parts.length !== 3) return false;
+  const [headerB64, payloadB64, sigB64] = parts;
+  if (!headerB64 || !payloadB64 || !sigB64) return false;
+
+  try {
+    const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8')) as {
+      alg?: string;
+      kid?: string;
+    };
+    if (header.alg !== 'RS256' || !header.kid) return false;
+
+    const certs = await getGooglePublicCerts();
+    const certPem = certs[header.kid];
+    if (!certPem) return false;
+
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(`${headerB64}.${payloadB64}`);
+    verifier.end();
+    const isValidSig = verifier.verify(certPem, Buffer.from(sigB64, 'base64url'));
+    if (!isValidSig) return false;
+
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as {
+      aud?: string;
+      iss?: string;
+      exp?: number;
+      iat?: number;
+      email?: string;
+      email_verified?: boolean;
+    };
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (payload.aud !== FIREBASE_PROJECT_ID) return false;
+    if (payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) return false;
+    if (typeof payload.exp !== 'number' || payload.exp <= nowSec) return false;
+    if (typeof payload.iat !== 'number' || payload.iat > nowSec + 300) return false;
+    if (payload.email?.toLowerCase() !== ADMIN_ALLOWED_EMAIL || payload.email_verified !== true) {
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// ==========================================
 // ADMIN PAGE & AUTHENTICATION
 // ==========================================
 app.get('/admin', (_req: Request, res: Response) => {
   res.sendFile(path.join(__dirname, 'static', 'admin.html'));
+});
+
+app.get('/api/admin/base-guests', async (req: Request, res: Response) => {
+  const token = extractAdminToken(req);
+  const authorized = (await verifyFirebaseAdminIdToken(token)) || verifyAdminToken(token);
+  if (!authorized) {
+    return res.status(401).json({
+      error: 'Unauthorized',
+      message: 'Akses ditolak. Silakan masuk sebagai administrator.'
+    });
+  }
+  return res.json({
+    status: 'ok',
+    base_url: getPublicBaseUrl(req),
+    guests: BASE_GUESTS
+  });
 });
 
 app.post('/api/admin/auth/login', (req: Request, res: Response) => {

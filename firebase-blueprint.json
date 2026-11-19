@@ -1,0 +1,155 @@
+{
+  "entities": {
+    "Wish": {
+      "title": "Wish",
+      "description": "Wedding wish, blessing, or private message sent by an invited guest to Adjie & Daulika.",
+      "type": "object",
+      "properties": {
+        "sender_name": {
+          "type": "string",
+          "description": "Display name of the guest sending the wish.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "description": "Body of the blessing or congratulatory message.",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "visibility": {
+          "type": "string",
+          "description": "Whether the wish can be displayed publicly to other guests or kept private for the couple.",
+          "enum": ["PUBLIC", "PRIVATE"]
+        },
+        "moderation_status": {
+          "type": "string",
+          "description": "Moderation state controlled on creation (PUBLIC->APPROVED, PRIVATE->PENDING) and updatable by admin.",
+          "enum": ["PENDING", "APPROVED", "REJECTED"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the wish was submitted."
+        },
+        "moderatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when an administrator last moderated the wish."
+        }
+      },
+      "required": ["sender_name", "message", "visibility", "moderation_status", "createdAt"]
+    },
+    "Rsvp": {
+      "title": "Rsvp",
+      "description": "Attendance confirmation for a single invited guest under the strict 1-person policy.",
+      "type": "object",
+      "properties": {
+        "guest_name": {
+          "type": "string",
+          "description": "Name of the guest confirming attendance.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "attending": {
+          "type": "boolean",
+          "description": "True if the guest will attend; false if declined."
+        },
+        "guest_count": {
+          "type": "integer",
+          "description": "Strict 1-person headcount: 1 when attending is true, 0 when attending is false."
+        },
+        "rsvp_status": {
+          "type": "string",
+          "description": "Canonical attendance status string matching the attending boolean.",
+          "enum": ["WILL_ATTEND", "DECLINED"]
+        },
+        "invitation_category": {
+          "type": "string",
+          "description": "Fixed single-person invitation category.",
+          "enum": ["B"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the RSVP was first recorded."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the RSVP was last updated."
+        }
+      },
+      "required": [
+        "guest_name",
+        "attending",
+        "guest_count",
+        "rsvp_status",
+        "invitation_category",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GuestOverride": {
+      "title": "GuestOverride",
+      "description": "Administrator override for a guest display name from the 153-entry invitation list.",
+      "type": "object",
+      "properties": {
+        "no": {
+          "type": "integer",
+          "description": "1-based guest list number from list_undangan.txt."
+        },
+        "guest_name": {
+          "type": "string",
+          "description": "Updated display name used to generate the personal ?to= link.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last edit."
+        }
+      },
+      "required": ["no", "guest_name", "updatedAt"]
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Read-only admin role marker managed exclusively via Firebase Console.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Verified administrator email address.",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "description": "Static admin role marker.",
+          "enum": ["admin"]
+        }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/wishes/{wishId}": {
+      "schema": { "$ref": "#/entities/Wish" },
+      "description": "Wedding wishes submitted by guests. PUBLIC + APPROVED wishes are publicly readable; PRIVATE and unapproved wishes are restricted to verified administrators."
+    },
+    "/rsvps/{rsvpId}": {
+      "schema": { "$ref": "#/entities/Rsvp" },
+      "description": "Guest attendance confirmations keyed by high-entropy client capability IDs. Only verified administrators can read or list RSVPs."
+    },
+    "/guest_overrides/{guestNo}": {
+      "schema": { "$ref": "#/entities/GuestOverride" },
+      "description": "Administrator-managed display name overrides for the 153 guest entries."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRole" },
+      "description": "Admin role records; strictly non-writable from client SDKs."
+    }
+  }
+}

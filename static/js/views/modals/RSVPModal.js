@@ -1,6 +1,7 @@
 import { createModal } from '../../ui/Modal.js';
 import { createRetroButton } from '../../ui/RetroButton.js';
 import { gameState, PHASES } from '../../state/GameState.js';
+import { submitRsvpToFirestore } from '../../firebase/firebaseClient.bundle.js';
 
 export function createRSVPModal() {
   const state = gameState.getState();
@@ -204,51 +205,17 @@ export function createRSVPModal() {
         submitBtn.innerText = 'Menyimpan...';
 
         const latestState = gameState.getState();
-        const payload = {
-          guest_name: latestState.guestName,
-          attending: attending ? 1 : 0,
-          guest_count: finalCount,
-          invitation_category: 'B'
-        };
+        const latestRsvp = latestState.rsvpData || {};
 
         try {
-          let rsvpResponse;
-          if (currentRSVP && currentRSVP.rsvp_id && currentRSVP.rsvp_token) {
-            rsvpResponse = await fetch(`/api/rsvp/${currentRSVP.rsvp_id}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-RSVP-Token': currentRSVP.rsvp_token
-              },
-              body: JSON.stringify(payload)
-            });
-          } else {
-            rsvpResponse = await fetch('/api/rsvp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            });
-          }
-
-          const rsvpData = await rsvpResponse.json();
-
-          if (!rsvpResponse.ok || rsvpData.status !== 'ok') {
-            resultBox.style.display = 'block';
-            resultBox.style.background = 'rgba(255, 60, 60, 0.2)';
-            resultBox.style.border = '1px solid #ff4444';
-            resultBox.style.color = '#ff9999';
-            resultBox.innerText = `Gagal menyimpan konfirmasi: ${rsvpData.message || 'Terjadi gangguan koneksi.'}`;
-            submitBtn.disabled = false;
-            submitBtn.innerText = 'Simpan Konfirmasi';
-            return;
-          }
-
-          const activeRsvpId = rsvpData.rsvp_id || currentRSVP.rsvp_id;
-          const activeRsvpToken = rsvpData.rsvp_token || currentRSVP.rsvp_token;
+          const rsvpData = await submitRsvpToFirestore({
+            rsvp_id: latestRsvp.rsvp_id || null,
+            guest_name: latestState.guestName,
+            attending
+          });
 
           gameState.saveRSVP({
-            rsvp_id: activeRsvpId,
-            rsvp_token: activeRsvpToken,
+            rsvp_id: rsvpData.rsvp_id,
             guestName: rsvpData.guest_name || latestState.guestName,
             category: 'B',
             attending,

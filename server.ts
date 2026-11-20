@@ -359,7 +359,10 @@ try {
   }
 } catch {}
 
-const ADMIN_ALLOWED_EMAIL = 'adjieprasatia@gmail.com';
+const ADMIN_ALLOWED_EMAILS = new Set([
+  'adjieprasatia@gmail.com',
+  'daulikap@gmail.com'
+]);
 const GOOGLE_CERTS_URL = 'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com';
 let cachedGoogleCerts: Record<string, string> = {};
 let cachedCertsExpiresAt = 0;
@@ -420,7 +423,8 @@ async function verifyFirebaseAdminIdToken(idToken: string | null): Promise<boole
     if (payload.iss !== `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`) return false;
     if (typeof payload.exp !== 'number' || payload.exp <= nowSec) return false;
     if (typeof payload.iat !== 'number' || payload.iat > nowSec + 300) return false;
-    if (payload.email?.toLowerCase() !== ADMIN_ALLOWED_EMAIL || payload.email_verified !== true) {
+    const normalizedEmail = typeof payload.email === 'string' ? payload.email.toLowerCase() : '';
+    if (!ADMIN_ALLOWED_EMAILS.has(normalizedEmail) || payload.email_verified !== true) {
       return false;
     }
     return true;

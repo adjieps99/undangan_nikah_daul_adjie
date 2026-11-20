@@ -15,6 +15,18 @@ export function createPhotoGalleryModal() {
       <p style="font-size: 12px; color: #f5eedc; line-height: 1.5; margin: 0;">Memuat galeri foto...</p>
     </div>
 
+    <p id="gallery-zoom-hint" style="
+      display: none;
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      color: #ffbe97;
+      line-height: 1.55;
+      text-align: center;
+      margin: 0 0 12px;
+    ">
+      Ketuk foto untuk memperbesar dan melihat ceritanya lebih dekat.
+    </p>
+
     <div id="gallery-grid" class="gallery-grid" style="
       display: none;
       grid-template-columns: repeat(auto-fill, minmax(125px, 1fr));
@@ -112,6 +124,7 @@ export function createPhotoGalleryModal() {
   `;
 
   const statusArea = content.querySelector('#gallery-status-area');
+  const zoomHint = content.querySelector('#gallery-zoom-hint');
   const grid = content.querySelector('#gallery-grid');
   const lightbox = content.querySelector('#gallery-lightbox');
   const lbCloseBtn = content.querySelector('#lb-close-btn');
@@ -123,6 +136,7 @@ export function createPhotoGalleryModal() {
   const lbCaption = content.querySelector('#lb-caption');
 
   const renderEmptyState = () => {
+    if (zoomHint) zoomHint.style.display = 'none';
     grid.style.display = 'none';
     lightbox.style.display = 'none';
     statusArea.style.display = 'block';
@@ -167,6 +181,7 @@ export function createPhotoGalleryModal() {
 
   const renderGrid = () => {
     statusArea.style.display = 'none';
+    if (zoomHint) zoomHint.style.display = 'block';
     grid.style.display = 'grid';
     grid.innerHTML = '';
 

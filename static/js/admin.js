@@ -1,5 +1,5 @@
 import {
-  ADMIN_EMAIL,
+  ADMIN_EMAILS,
   isVerifiedAdminUser,
   signInAdminWithGoogle,
   signOutAdmin,
@@ -593,7 +593,7 @@ googleLoginBtn.addEventListener('click', async () => {
     const user = await signInAdminWithGoogle();
     if (!isVerifiedAdminUser(user)) {
       await signOutAdmin();
-      showLoginScreen(`Akun ${user?.email || ''} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAIL}.`);
+      showLoginScreen(`Akun ${user?.email || ''} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAILS.join(' atau ')}.`);
     }
   } catch (err) {
     const code = err && typeof err === 'object' && 'code' in err ? String(err.code) : '';
@@ -709,7 +709,7 @@ subscribeAdminAuth(async (user) => {
   if (!isVerifiedAdminUser(user)) {
     const email = user.email || 'akun ini';
     await signOutAdmin();
-    showLoginScreen(`Akun ${email} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAIL}.`);
+    showLoginScreen(`Akun ${email} tidak memiliki akses administrator. Silakan masuk dengan akun ${ADMIN_EMAILS.join(' atau ')}.`);
     return;
   }
   startAdminDashboard(user);

@@ -29,8 +29,10 @@ function isHighEntropyId(id: unknown): boolean {
   return typeof id === 'string' && id.length >= 24 && id.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(id);
 }
 
+const ADMIN_EMAILS = new Set(['adjieprasatia@gmail.com', 'daulikap@gmail.com']);
+
 function isAdmin(auth: MockAuth | null): boolean {
-  return Boolean(auth && auth.email === 'adjieprasatia@gmail.com' && auth.email_verified === true);
+  return Boolean(auth && typeof auth.email === 'string' && ADMIN_EMAILS.has(auth.email) && auth.email_verified === true);
 }
 
 function hasExactKeys(data: Record<string, unknown>, allowed: string[]): boolean {
@@ -82,6 +84,7 @@ test('firestore.rules structural guards match firebase-blueprint.json verbatim',
   assert.match(rulesText, /rules_version = '2';/);
   assert.match(rulesText, /match \/\{document=\*\*\}\s*\{\s*allow read, write: if false;\s*\}/);
   assert.match(rulesText, /request\.auth\.token\.email == 'adjieprasatia@gmail\.com'/);
+  assert.match(rulesText, /request\.auth\.token\.email == 'daulikap@gmail\.com'/);
   assert.match(rulesText, /request\.auth\.token\.email_verified == true/);
 
   for (const colPath of Object.keys(blueprint.firestore)) {
@@ -143,7 +146,10 @@ test('Dirty Dozen adversarial payloads are all rejected (PERMISSION_DENIED)', ()
   assert.equal(canListWish(null, { visibility: 'PUBLIC', moderation_status: 'APPROVED' }), true);
   assert.equal(isAdmin(null), false);
   assert.equal(isAdmin({ uid: 'spoof', email: 'adjieprasatia@gmail.com', email_verified: false }), false);
-  assert.equal(isAdmin({ uid: 'admin', email: 'adjieprasatia@gmail.com', email_verified: true }), true);
+  assert.equal(isAdmin({ uid: 'spoof2', email: 'daulikap@gmail.com', email_verified: false }), false);
+  assert.equal(isAdmin({ uid: 'random', email: 'stranger@gmail.com', email_verified: true }), false);
+  assert.equal(isAdmin({ uid: 'admin1', email: 'adjieprasatia@gmail.com', email_verified: true }), true);
+  assert.equal(isAdmin({ uid: 'admin2', email: 'daulikap@gmail.com', email_verified: true }), true);
   assert.match(rulesText, /match \/rsvps\/\{rsvpId\}[\s\S]*allow get: if isAdmin\(\)/);
   assert.match(rulesText, /match \/rsvps\/\{rsvpId\}[\s\S]*allow list: if isAdmin\(\);/);
   assert.equal(

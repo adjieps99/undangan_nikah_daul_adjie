@@ -32,6 +32,10 @@ const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 export const ADMIN_EMAIL = 'adjieprasatia@gmail.com';
+export const ADMIN_EMAILS: readonly string[] = [
+  'adjieprasatia@gmail.com',
+  'daulikap@gmail.com'
+];
 
 export const BLUEPRINT_LIMITS = {
   WISH_SENDER_MAX: 80,
@@ -335,7 +339,7 @@ export function isVerifiedAdminUser(user: User | null): boolean {
   return Boolean(
     user &&
       user.email &&
-      user.email.toLowerCase() === ADMIN_EMAIL &&
+      ADMIN_EMAILS.includes(user.email.toLowerCase()) &&
       user.emailVerified === true
   );
 }
